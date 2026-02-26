@@ -8,10 +8,10 @@ export default {
   theme: {
     extend: {
 
-      // ===== ANIMACIONES GLOBALes TIPO iOS =====
+      // ===== ANIMACIONES CUSTOM =====
       keyframes: {
         fadeUp: {
-          "0%": { opacity: 0, transform: "translateY(10px)" },
+          "0%": { opacity: 0, transform: "translateY(12px)" },
           "100%": { opacity: 1, transform: "translateY(0)" }
         },
         fadeIn: {
@@ -19,7 +19,7 @@ export default {
           "100%": { opacity: 1 }
         },
         pageIn: {
-          "0%": { opacity: 0, transform: "scale(0.96)" },
+          "0%": { opacity: 0, transform: "scale(0.97)" },
           "100%": { opacity: 1, transform: "scale(1)" }
         },
         slideIn: {
@@ -29,16 +29,31 @@ export default {
         pop: {
           "0%": { transform: "scale(0.94)", opacity: 0 },
           "100%": { transform: "scale(1)", opacity: 1 }
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-6px)" }
+        },
+        shimmer: {
+          "0%": { backgroundPosition: "-200% 0" },
+          "100%": { backgroundPosition: "200% 0" }
         }
       },
 
       animation: {
-        fadeUp: "fadeUp .45s ease-out",
-        fadeIn: "fadeIn .35s ease-out",
-        pageIn: "pageIn .45s cubic-bezier(0.16,1,0.3,1)",
-        slideIn: "slideIn .45s ease-out",
-        pop: "pop .28s cubic-bezier(.18,.89,.32,1.28)"
-      }
+        fadeUp: "fadeUp .5s ease-out both",
+        fadeIn: "fadeIn .4s ease-out both",
+        pageIn: "pageIn .5s cubic-bezier(0.16,1,0.3,1)",
+        slideIn: "slideIn .45s ease-out both",
+        pop: "pop .3s cubic-bezier(.18,.89,.32,1.28) both",
+        float: "float 3s ease-in-out infinite",
+        shimmer: "shimmer 2s linear infinite"
+      },
+
+      // ===== SCREENS =====
+      screens: {
+        'xs': '475px',
+      },
 
     },
   },

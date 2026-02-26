@@ -5,93 +5,79 @@ import { PiPlantLight } from "react-icons/pi";
 import { LuClock } from "react-icons/lu";
 import { GrConfigure } from "react-icons/gr";
 
-
+const menu = [
+  { path: "/", label: "Inicio", icon: FiHome },
+  { path: "/control", label: "Control", icon: FiSliders },
+  { path: "/cultivos", label: "Cultivos", icon: PiPlantLight },
+  { path: "/historial", label: "Historial", icon: LuClock },
+  { path: "/automatico", label: "Auto", icon: GrConfigure },
+  { path: "/ajustes", label: "Ajustes", icon: FiSettings },
+];
 
 export default function Layout({ children }) {
   const { pathname } = useLocation();
 
-  const menu = [
-    { path: "/", label: "Menú Principal", icon: <FiHome size={22} /> },
-    { path: "/control", label: "Control", icon: <FiSliders size={22} /> },
-    { path: "/cultivos", label: "Cultivos", icon: <PiPlantLight size={22} /> },
-        { path: "/historial", label: "Historial", icon: <LuClock size={22} /> },
-        { path: "/automatico", label: "Automático", icon: <GrConfigure size={22} /> },
-    { path: "/ajustes", label: "Ajustes", icon: <FiSettings size={22} /> },
-    
-  ];
-
   return (
-    <div className="flex min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100">
+    <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50/30 to-sky-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950/40 text-gray-800 dark:text-gray-100">
 
-      {/* ▓▓▓ SIDEBAR PREMIUM ▓▓▓ */}
+      {/* ═══ DESKTOP SIDEBAR ═══ */}
       <aside
         className="
-          group relative
-          bg-white/40 dark:bg-gray-800/30
+          hidden md:flex
+          group relative z-30
+          bg-white/50 dark:bg-slate-900/50
           backdrop-blur-2xl
-          border-r border-white/50 dark:border-gray-700/40
-          shadow-[0_8px_30px_rgba(0,0,0,0.15)]
-          w-20 hover:w-64
-          transition-all duration-500
-          flex flex-col
-          rounded-r-3xl
+          border-r border-white/60 dark:border-slate-800/50
+          shadow-[0_0_40px_rgba(0,0,0,0.06)]
+          w-[72px] hover:w-60
+          transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]
+          flex-col
+          rounded-r-[2rem]
         "
       >
-        {/* Glow decorativo */}
-        <div className="absolute inset-0 pointer-events-none opacity-40 group-hover:opacity-70 transition-opacity">
-          <div className="absolute -top-20 left-10 w-64 h-64 bg-green-400/20 blur-3xl rounded-full"></div>
-          <div className="absolute bottom-0 right-0 w-40 h-40 bg-green-300/10 blur-2xl rounded-full"></div>
+        {/* Decorative glow */}
+        <div className="absolute inset-0 pointer-events-none opacity-30 group-hover:opacity-50 transition-opacity duration-700">
+          <div className="absolute -top-20 left-4 w-52 h-52 bg-emerald-400/20 blur-[80px] rounded-full" />
+          <div className="absolute bottom-10 right-0 w-36 h-36 bg-sky-400/15 blur-[60px] rounded-full" />
         </div>
 
-        {/* LOGO */}
-        <div className="flex items-center justify-center py-7 relative z-10">
-          <WiRaindrop className="text-green-600 dark:text-green-400 w-12 h-12 drop-shadow-2xl" />
+        {/* Logo */}
+        <div className="flex items-center justify-center py-6 relative z-10">
+          <div className="relative">
+            <div className="absolute inset-0 bg-emerald-400/30 blur-xl rounded-full" />
+            <WiRaindrop className="relative text-emerald-600 dark:text-emerald-400 w-10 h-10 drop-shadow-lg" />
+          </div>
         </div>
 
-        {/* NAVIGATION */}
-        <nav className="mt-4 space-y-2 px-3 relative z-10">
+        {/* Navigation */}
+        <nav className="mt-2 space-y-1 px-2.5 relative z-10 flex-1">
           {menu.map((item) => {
             const active = pathname === item.path;
+            const Icon = item.icon;
 
             return (
               <Link
                 key={item.path}
                 to={item.path}
                 className={`
-                  flex items-center gap-4 px-4 py-3 rounded-2xl
-                  text-base font-medium transition-all duration-300 relative
-
-                  ${
-                    active
-                      ? "bg-green-600 text-white shadow-xl scale-[1.03]"
-                      : "text-gray-700 dark:text-gray-300 hover:bg-white/30 dark:hover:bg-gray-700/40"
+                  flex items-center gap-3.5 px-3 py-2.5 rounded-xl
+                  text-[13px] font-semibold tracking-wide
+                  transition-all duration-300 relative overflow-hidden
+                  ${active
+                    ? "bg-emerald-600 text-white shadow-lg shadow-emerald-600/25"
+                    : "text-gray-600 dark:text-gray-400 hover:bg-white/60 dark:hover:bg-slate-800/50 hover:text-gray-900 dark:hover:text-gray-100"
                   }
                 `}
               >
-                {/* Barra activa */}
-                {active && (
-                  <span className="
-                    absolute left-0 top-0 h-full w-1 
-                    bg-white dark:bg-green-300 
-                    rounded-r-xl shadow-lg
-                  " />
-                )}
-
-                {/* Icono */}
-                <span
-                  className={`${
-                    active ? "text-white" : "text-green-700 dark:text-green-400"
-                  }`}
-                >
-                  {item.icon}
+                <span className="flex-shrink-0">
+                  <Icon size={20} />
                 </span>
-
-                {/* Texto expandible */}
                 <span
                   className="
-                    whitespace-nowrap text-lg 
-                    opacity-0 group-hover:opacity-100 
-                    transition-opacity duration-300
+                    whitespace-nowrap
+                    opacity-0 group-hover:opacity-100
+                    translate-x-2 group-hover:translate-x-0
+                    transition-all duration-300
                   "
                 >
                   {item.label}
@@ -100,12 +86,61 @@ export default function Layout({ children }) {
             );
           })}
         </nav>
+
+        {/* Bottom branding */}
+        <div className="px-3 py-4 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+          <p className="text-[10px] text-gray-400 dark:text-gray-600 text-center tracking-wider uppercase">
+            SmartIrrigate UV
+          </p>
+        </div>
       </aside>
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 p-8 sm:p-10 animate-pageIn">
-        {children}
+      {/* ═══ MAIN CONTENT ═══ */}
+      <main className="flex-1 min-w-0 pb-20 md:pb-0">
+        <div className="px-4 sm:px-6 lg:px-8 py-6 sm:py-8 animate-pageIn">
+          {children}
+        </div>
       </main>
+
+      {/* ═══ MOBILE BOTTOM NAV ═══ */}
+      <nav
+        className="
+          fixed bottom-0 inset-x-0 z-50
+          md:hidden
+          glass safe-bottom
+          border-t border-white/20 dark:border-slate-800/40
+          shadow-[0_-4px_30px_rgba(0,0,0,0.1)]
+        "
+      >
+        <div className="flex items-center justify-around px-2 py-2">
+          {menu.map((item) => {
+            const active = pathname === item.path;
+            const Icon = item.icon;
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`
+                  flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-xl
+                  transition-all duration-300 min-w-[48px]
+                  ${active
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                  }
+                `}
+              >
+                <div className={`relative p-1 rounded-xl transition-all duration-300 ${active ? "bg-emerald-100/80 dark:bg-emerald-900/40" : ""}`}>
+                  <Icon size={20} />
+                </div>
+                <span className={`text-[10px] font-medium tracking-wide ${active ? "font-semibold" : ""}`}>
+                  {item.label}
+                </span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
