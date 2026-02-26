@@ -1,9 +1,9 @@
-import { Link, useLocation } from "react-router-dom";
-import { WiRaindrop } from "react-icons/wi";
-import { FiHome, FiSliders, FiSettings } from "react-icons/fi";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { FiHome, FiSliders, FiSettings, FiLogOut } from "react-icons/fi";
 import { PiPlantLight } from "react-icons/pi";
 import { LuClock } from "react-icons/lu";
 import { GrConfigure } from "react-icons/gr";
+import { useAuth } from "../context/AuthContext";
 
 const menu = [
   { path: "/", label: "Inicio", icon: FiHome },
@@ -16,6 +16,13 @@ const menu = [
 
 export default function Layout({ children }) {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const { userData, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    navigate("/login");
+  }
 
   return (
     <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-emerald-50/30 to-sky-50/30 dark:from-slate-950 dark:via-slate-900 dark:to-emerald-950/40 text-gray-800 dark:text-gray-100">
@@ -44,8 +51,8 @@ export default function Layout({ children }) {
         {/* Logo */}
         <div className="flex items-center justify-center py-6 relative z-10">
           <div className="relative">
-            <div className="absolute inset-0 bg-emerald-400/30 blur-xl rounded-full" />
-            <WiRaindrop className="relative text-emerald-600 dark:text-emerald-400 w-10 h-10 drop-shadow-lg" />
+            <div className="absolute inset-0 bg-emerald-400/20 blur-xl rounded-full scale-125" />
+            <img src="/lis-logo.png" alt="Lis" className="relative w-10 h-10 drop-shadow-lg" />
           </div>
         </div>
 
@@ -87,11 +94,28 @@ export default function Layout({ children }) {
           })}
         </nav>
 
-        {/* Bottom branding */}
-        <div className="px-3 py-4 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-          <p className="text-[10px] text-gray-400 dark:text-gray-600 text-center tracking-wider uppercase">
-            SmartIrrigate UV
-          </p>
+        {/* Bottom — user + logout */}
+        <div className="px-3 py-4 relative z-10 space-y-2">
+          {userData && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center truncate opacity-0 group-hover:opacity-100 transition-opacity duration-500">
+              {userData.nombre}
+            </p>
+          )}
+          <button
+            onClick={handleLogout}
+            className="
+              flex items-center gap-3.5 px-3 py-2.5 rounded-xl w-full
+              text-[13px] font-semibold tracking-wide
+              text-gray-500 dark:text-gray-400
+              hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400
+              transition-all duration-300
+            "
+          >
+            <FiLogOut size={20} className="flex-shrink-0" />
+            <span className="whitespace-nowrap opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300">
+              Cerrar sesión
+            </span>
+          </button>
         </div>
       </aside>
 

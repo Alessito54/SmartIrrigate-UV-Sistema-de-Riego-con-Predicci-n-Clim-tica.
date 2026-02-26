@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { ref, onValue, remove } from "firebase/database";
 import { db } from "../services/firebase";
+import { useAuth } from "../context/AuthContext";
 
 export default function Historial() {
+  const { sectionPath } = useAuth();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = ref(db, "invernadero/historial_riego");
-    onValue(q, (snap) => {
+    if (!sectionPath) return;
+    const unsub = onValue(ref(db, `${sectionPath}/historial_riego`), (snap) => {
       const val = snap.val() || {};
       const arr = Object.values(val).sort(
         (a, b) => new Date(b.inicio) - new Date(a.inicio)
@@ -16,7 +18,8 @@ export default function Historial() {
       setItems(arr);
       setLoading(false);
     });
-  }, []);
+    return () => unsub();
+  }, [sectionPath]);
 
   // Totales
   const totalLitros = items.reduce((a, b) => a + b.litros, 0).toFixed(2);
@@ -28,7 +31,8 @@ export default function Historial() {
   // === LIMPIAR HISTORIAL ===
   async function limpiarHistorial() {
     if (!confirm("¿Seguro que deseas borrar TODO el historial?")) return;
-    await remove(ref(db, "invernadero/historial_riego"));
+    if (!sectionPath) return;
+    await remove(ref(db, `${sectionPath}/historial_riego`));
     alert("Historial eliminado.");
   }
 

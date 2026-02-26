@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { ref, onValue } from "firebase/database";
 import { db } from "../services/firebase";
+import { useAuth } from "../context/AuthContext";
 
 export default function Cultivos() {
   const API_KEY = import.meta.env.VITE_CULTIVOS_API_KEY;
-  console.log("Tu API KEY es:", API_KEY);
+  const { sectionPath } = useAuth();
   const [cultivos, setCultivos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -16,8 +17,10 @@ export default function Cultivos() {
   const [sensores, setSensores] = useState(null);
 
   useEffect(() => {
-    onValue(ref(db, "invernadero/sensores"), (s) => setSensores(s.val()));
-  }, []);
+    if (!sectionPath) return;
+    const unsub = onValue(ref(db, `${sectionPath}/sensores`), (s) => setSensores(s.val()));
+    return () => unsub();
+  }, [sectionPath]);
 
   // === CARGAR VARIAS PÁGINAS PARA OBTENER FRUTAS/VERDURAS ===
   useEffect(() => {
@@ -88,8 +91,8 @@ export default function Cultivos() {
     search.trim() === ""
       ? cultivos
       : cultivos.filter((c) =>
-          (c.common_name || "").toLowerCase().includes(search.toLowerCase())
-        );
+        (c.common_name || "").toLowerCase().includes(search.toLowerCase())
+      );
 
   // === CALCULAR FACTIBILIDAD ===
   function factibilidad(details) {

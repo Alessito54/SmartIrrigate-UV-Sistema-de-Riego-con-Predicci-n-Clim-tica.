@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, memo } from "react";
 import { ref, onValue, set, push, serverTimestamp } from "firebase/database";
 import { db } from "../services/firebase";
+import { useAuth } from "../context/AuthContext";
 import { WiRaindrop } from "react-icons/wi";
 import { FiAlertTriangle, FiShield } from "react-icons/fi";
 import { LuClock } from "react-icons/lu";
@@ -208,6 +209,7 @@ const ControlCard = memo(function ControlCard({ type, value, onToggle, index }) 
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Control() {
+  const { sectionPath } = useAuth();
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
   const [inicioRiego, setInicioRiego] = useState(null);
@@ -221,12 +223,13 @@ export default function Control() {
 
   // Realtime listeners with cleanup
   useEffect(() => {
+    if (!sectionPath) return;
     const unsubs = [
-      onValue(ref(db, "invernadero/control/riego"), (s) => setRiego(s.val())),
-      onValue(ref(db, "invernadero/control/malla"), (s) => setMalla(s.val())),
+      onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val())),
+      onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val())),
     ];
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [sectionPath]);
 
   const pedirConfirmacion = useCallback((type, value) => {
     setModal({ open: true, type, value });
@@ -241,7 +244,7 @@ export default function Control() {
     try {
       if (modal.type === "riego") {
         const nuevoEstado = modal.value;
-        await set(ref(db, "invernadero/control/riego"), nuevoEstado);
+        await set(ref(db, `${sectionPath}/control/riego`), nuevoEstado);
         setRiego(nuevoEstado);
 
         if (nuevoEstado === true) {
@@ -254,7 +257,7 @@ export default function Control() {
           const caudal = 0.028;
           const litros = parseFloat((duracionSeg * caudal).toFixed(2));
 
-          await push(ref(db, "invernadero/historial_riego"), {
+          await push(ref(db, `${sectionPath}/historial_riego`), {
             inicio: new Date(inicioRiego).toISOString(),
             fin: new Date(fin).toISOString(),
             duracion_seg: duracionSeg,
@@ -267,14 +270,14 @@ export default function Control() {
       }
 
       if (modal.type === "malla") {
-        await set(ref(db, "invernadero/control/malla"), modal.value);
+        await set(ref(db, `${sectionPath}/control/malla`), modal.value);
         setMalla(modal.value);
       }
     } finally {
       setLoading(false);
       setModal({ open: false, type: null, value: null });
     }
-  }, [modal, inicioRiego]);
+  }, [modal, inicioRiego, sectionPath]);
 
   // Dynamic modal message
   const modalConfig = modal.type

@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { ref, onValue } from "firebase/database";
 import { db } from "../services/firebase";
+import { useAuth } from "../context/AuthContext";
 import { obtenerPronostico } from "../services/weather";
 import { generarPrediccionIA } from "../services/iaLocal";
 
@@ -459,6 +460,7 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Dashboard() {
+  const { sectionPath, invPath } = useAuth();
   const [sensores, setSensores] = useState(null);
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
@@ -468,14 +470,15 @@ export default function Dashboard() {
 
   // Firebase listeners
   useEffect(() => {
+    if (!sectionPath || !invPath) return;
     const unsubs = [
-      onValue(ref(db, "invernadero/sensores"), (s) => setSensores(s.val())),
-      onValue(ref(db, "invernadero/control/riego"), (s) => setRiego(s.val())),
-      onValue(ref(db, "invernadero/control/malla"), (s) => setMalla(s.val())),
-      onValue(ref(db, "invernadero/estado/online"), (s) => setOnline(s.val()))
+      onValue(ref(db, `${sectionPath}/sensores`), (s) => setSensores(s.val())),
+      onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val())),
+      onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val())),
+      onValue(ref(db, `${invPath}/estado/online`), (s) => setOnline(s.val()))
     ];
     return () => unsubs.forEach((unsub) => unsub());
-  }, []);
+  }, [sectionPath, invPath]);
 
   // Geolocation → weather
   useEffect(() => {
