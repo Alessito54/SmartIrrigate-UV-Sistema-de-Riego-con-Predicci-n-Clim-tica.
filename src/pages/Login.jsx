@@ -3,6 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { FiMail, FiLock, FiLogIn, FiUser } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
+import { PROJECT_NAME, PROJECT_LOGO } from "../config";
 
 export default function Login() {
     const { user, login, register, loginWithGoogle, resetPassword, loading: authLoading } = useAuth();
@@ -10,6 +11,8 @@ export default function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [nombre, setNombre] = useState("");
+    const [acceptTerms, setAcceptTerms] = useState(false);
+    const [showTermsModal, setShowTermsModal] = useState(false);
     const [error, setError] = useState(null);
     const [success, setSuccess] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -22,7 +25,7 @@ export default function Login() {
             </div>
         );
     }
-    if (user) return <Navigate to="/" replace />;
+    if (user) return <Navigate to="/dashboard" replace />;
 
     const errorMessages = {
         "auth/invalid-credential": "Correo o contraseña incorrectos",
@@ -39,6 +42,12 @@ export default function Login() {
         e.preventDefault();
         setError(null);
         setSuccess(null);
+
+        if (isRegister && !acceptTerms) {
+            setError("Debes aceptar los Términos y Condiciones para crear tu cuenta.");
+            return;
+        }
+
         setLoading(true);
         try {
             if (isRegister) {
@@ -103,13 +112,13 @@ export default function Login() {
                     <div className="relative mb-3">
                         <div className="absolute inset-0 bg-emerald-400/20 blur-xl rounded-full scale-125" />
                         <img
-                            src="/lis-logo.png"
-                            alt="Lis"
+                            src={PROJECT_LOGO}
+                            alt={`${PROJECT_NAME} Logo`}
                             className="relative w-20 h-20 drop-shadow-lg"
                         />
                     </div>
                     <h1 className="text-2xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
-                        Lis
+                        {PROJECT_NAME}
                     </h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                         {isRegister ? "Crea tu cuenta para comenzar" : "Accede a tu invernadero"}
@@ -166,7 +175,7 @@ export default function Login() {
                                 type="email"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                placeholder="tu@correo.com"
+                                placeholder="ejemplo@correo.com"
                                 required
                                 className="flex-1 bg-transparent outline-none text-gray-800 dark:text-gray-100 text-sm placeholder:text-gray-400"
                             />
@@ -202,6 +211,30 @@ export default function Login() {
                             >
                                 ¿Olvidaste tu contraseña?
                             </button>
+                        </div>
+                    )}
+
+                    {/* Terms Checkbox (only on register) */}
+                    {isRegister && (
+                        <div className="flex items-start gap-3 animate-fadeUp">
+                            <input
+                                type="checkbox"
+                                id="terms"
+                                checked={acceptTerms}
+                                onChange={(e) => setAcceptTerms(e.target.checked)}
+                                className="mt-1 w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                            />
+                            <label htmlFor="terms" className="text-sm text-gray-600 dark:text-gray-400">
+                                He leído y acepto los{" "}
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTermsModal(true)}
+                                    className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                                >
+                                    términos y condiciones
+                                </button>
+                                .
+                            </label>
                         </div>
                     )}
 
@@ -264,7 +297,7 @@ export default function Login() {
                         {isRegister ? "¿Ya tienes cuenta?" : "¿No tienes cuenta?"}{" "}
                         <button
                             type="button"
-                            onClick={() => { setIsRegister(!isRegister); setError(null); setSuccess(null); }}
+                            onClick={() => { setIsRegister(!isRegister); setError(null); setSuccess(null); setAcceptTerms(false); }}
                             className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
                         >
                             {isRegister ? "Inicia sesión" : "Crea una cuenta"}
@@ -272,6 +305,60 @@ export default function Login() {
                     </p>
                 </form>
             </div>
+
+            {/* Terms Modal overlay */}
+            {showTermsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-2xl max-h-[80vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+                        <div className="p-6 border-b border-gray-100 dark:border-slate-800 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
+                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Términos y Condiciones de Uso</h2>
+                            <button onClick={() => setShowTermsModal(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                                <span className="sr-only">Cerrar</span>
+                                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto text-sm text-gray-600 dark:text-gray-400 space-y-4">
+                            <p><strong>Última actualización:</strong> {new Date().toLocaleDateString()}</p>
+                            <p>Bienvenido a {PROJECT_NAME}. Al registrarse para obtener una cuenta y utilizar nuestro sistema inteligente, usted acepta estar sujeto a los siguientes términos y condiciones de servicio. Lea atentamente este documento.</p>
+
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mt-4 text-base">1. Uso del Servicio y Herramientas</h3>
+                            <p>El sistema proporciona herramientas de automatización, monitoreo de sensores (humedad, temperatura) y predicción climática. Su uso es responsabilidad exclusiva del usuario con el fin de optimizar el riego. No garantizamos resultados agrícolas infalibles, puesto que las condiciones ambientales reales pueden variar de manera impredecible.</p>
+
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mt-4 text-base">2. Privacidad de Datos y Telemetría</h3>
+                            <p>Conforme a nuestras normas de protección, guardamos telemetría e información vital (temperatura, clima, humedad de suelo) generada por sus sensores. Todo el flujo es encriptado en reposo y en tránsito. Su correo e información de acceso personal es manejado bajo un trato estricto y no será vendido a terceros con fines de lucro o de marketing ajenos.</p>
+
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mt-4 text-base">3. Limitación de Responsabilidad</h3>
+                            <p>{PROJECT_NAME}, sus desarrolladores, la Universidad Veracruzana o cualquier entidad asociada no será responsable directa o indirectamente por la pérdida parcial o total de los cultivos derivada de situaciones como:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                                <li>Interrupción general o fallos del software por mantenimientos.</li>
+                                <li>Pérdida de conectividad de los sensores a la red local WiFi.</li>
+                                <li>Instalación eléctrica y/o mal cableado en las bombas de agua.</li>
+                                <li>Casos de fuerza mayor, catástrofes naturales y eventos fuera de control técnico.</li>
+                            </ul>
+
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mt-4 text-base">4. Cuenta y Seguridad</h3>
+                            <p>El usuario se compromete a mantener medidas de seguridad sobre sus credenciales. Queda prohibido el intento de ingeniería inversa, inyectar código malicioso en la plataforma o usar de manera abusiva las automatizaciones (botnets) hacia nuestros endpoints.</p>
+
+                            <h3 className="font-semibold text-gray-800 dark:text-gray-200 mt-4 text-base">5. Modificaciones y Actualizaciones</h3>
+                            <p>Nos reservamos el derecho de modificar estos términos de servicio, políticas de datos o interrumpir el acceso al backend de experimentación en cualquier momento, siempre mediante un aviso general. El uso continuado supondrá la aceptación implícita.</p>
+                        </div>
+                        <div className="p-6 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-3">
+                            <button
+                                onClick={() => setShowTermsModal(false)}
+                                className="px-5 py-2.5 text-gray-600 dark:text-gray-300 text-sm font-semibold hover:bg-gray-100 dark:hover:bg-slate-700/50 rounded-xl transition"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                onClick={() => { setAcceptTerms(true); setShowTermsModal(false); }}
+                                className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-xl shadow-lg transition active:scale-[0.97]"
+                            >
+                                Aceptar Condiciones
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

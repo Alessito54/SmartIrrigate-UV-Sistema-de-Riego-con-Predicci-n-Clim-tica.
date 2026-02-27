@@ -9,12 +9,14 @@ import Ajustes from "./pages/Ajustes";
 import Cultivos from "./pages/Cultivos";
 import Historial from "./pages/Historial";
 import Automatico from "./pages/Automatico";
+import Landing from "./pages/Landing";
 
 export default function App() {
   return (
     <AuthProvider>
       <Routes>
         {/* Public */}
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
 
         {/* Protected */}
@@ -24,7 +26,7 @@ export default function App() {
             <ProtectedRoute>
               <Layout>
                 <Routes>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/control" element={<Control />} />
                   <Route path="/ajustes" element={<Ajustes />} />
                   <Route path="/cultivos" element={<Cultivos />} />
