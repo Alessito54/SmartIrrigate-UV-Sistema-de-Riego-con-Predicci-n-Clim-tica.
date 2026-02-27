@@ -26,7 +26,7 @@ export default function Cultivos() {
   useEffect(() => {
     async function cargar() {
       try {
-        const pages = [1, 2, 3]; // ← AQUÍ SE ARREGLA EL PROBLEMA
+        const pages = [1, 2, 3];
 
         const requests = pages.map((p) =>
           fetch(`https://perenual.com/api/species-list?key=${API_KEY}&page=${p}`)

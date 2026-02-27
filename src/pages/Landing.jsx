@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { FiArrowRight, FiCheckCircle, FiTarget, FiShield, FiBookOpen, FiMenu, FiX, FiChevronLeft, FiChevronRight } from "react-icons/fi";
+import { FiArrowRight, FiCheckCircle, FiTarget, FiShield, FiBookOpen, FiMenu, FiX, FiChevronLeft, FiChevronRight, FiMail } from "react-icons/fi";
 import { FaScaleBalanced, FaHandshakeAngle, FaFacebookF, FaInstagram, FaTiktok } from "react-icons/fa6";
 import { HiOutlineLightBulb } from "react-icons/hi";
-import { PROJECT_NAME, PROJECT_LOGO, SOCIAL_FACEBOOK, SOCIAL_INSTAGRAM, SOCIAL_TIKTOK } from "../config";
+import { PROJECT_NAME, PROJECT_LOGO, SOCIAL_FACEBOOK, SOCIAL_INSTAGRAM, SOCIAL_TIKTOK, CONTACT_EMAIL } from "../config";
 import campoAgricola from '../assets/images/campo-agricola.jpg';
 import monitoreo from '../assets/images/monitor.jpg';
 import campoAgricola2 from '../assets/images/campo-agricola2.jpg';
@@ -33,6 +33,15 @@ export default function Landing() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const [currentSlide, setCurrentSlide] = useState(0);
+    const [contactForm, setContactForm] = useState({ nombre: '', email: '', mensaje: '' });
+
+    const handleContactSubmit = (e) => {
+        e.preventDefault();
+        const subject = encodeURIComponent(`Nuevo mensaje de contacto de ${contactForm.nombre}`);
+        const body = encodeURIComponent(`Nombre: ${contactForm.nombre}\nEmail: ${contactForm.email}\n\nMensaje:\n${contactForm.mensaje}`);
+        window.location.href = `mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+        setContactForm({ nombre: '', email: '', mensaje: '' });
+    };
 
     useEffect(() => {
         const handleScroll = () => setIsScrolled(window.scrollY > 50);
@@ -53,6 +62,7 @@ export default function Landing() {
         { name: "Descubre", href: "#carrusel" },
         { name: "Quiénes Somos", href: "#nosotros" },
         { name: "Normas", href: "#normas" },
+        { name: "Contacto", href: "#contacto" },
     ];
 
     return (
@@ -208,6 +218,68 @@ export default function Landing() {
                                     <p className="text-slate-300">Redes encriptadas, eficiencia energética e interoperabilidad segura de hardware a nube.</p>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* CONTACTO */}
+                <section id="contacto" className="py-24 relative overflow-hidden bg-slate-900 border-t border-slate-800 text-white">
+                    <div className="absolute inset-0 pointer-events-none opacity-20">
+                        <div className="absolute -top-40 -left-40 w-[500px] h-[500px] bg-emerald-600 rounded-full blur-[100px]" />
+                        <div className="absolute top-40 -right-40 w-[400px] h-[400px] bg-sky-600 rounded-full blur-[100px]" />
+                    </div>
+                    <div className="relative z-10 max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                        <div>
+                            <h2 className="text-4xl md:text-5xl font-black mb-6 drop-shadow-md">¿Tienes alguna duda o propuesta?</h2>
+                            <p className="text-xl md:text-2xl text-slate-300 mb-8 drop-shadow-sm">Nuestro equipo está listo para ayudarte a revolucionar tu forma de cultivo. Déjanos tus datos y nos pondremos en contacto contigo.</p>
+                            <div className="flex items-center gap-4 text-emerald-400 font-bold text-xl bg-slate-800/50 p-6 rounded-2xl w-fit border border-slate-700">
+                                <FiMail className="text-3xl" /> {CONTACT_EMAIL}
+                            </div>
+                        </div>
+                        <div className="glass bg-slate-800/60 border border-slate-700 p-8 md:p-10 rounded-3xl shadow-2xl">
+                            <form onSubmit={handleContactSubmit} className="flex flex-col gap-6 text-left">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="nombre" className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Nombre</label>
+                                        <input
+                                            id="nombre"
+                                            type="text"
+                                            value={contactForm.nombre}
+                                            onChange={(e) => setContactForm({ ...contactForm, nombre: e.target.value })}
+                                            placeholder="Tu nombre completo"
+                                            required
+                                            className="bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label htmlFor="email" className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Correo</label>
+                                        <input
+                                            id="email"
+                                            type="email"
+                                            value={contactForm.email}
+                                            onChange={(e) => setContactForm({ ...contactForm, email: e.target.value })}
+                                            placeholder="tu@correo.com"
+                                            required
+                                            className="bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-2">
+                                    <label htmlFor="mensaje" className="text-sm font-semibold text-slate-300 uppercase tracking-wider">Mensaje</label>
+                                    <textarea
+                                        id="mensaje"
+                                        value={contactForm.mensaje}
+                                        onChange={(e) => setContactForm({ ...contactForm, mensaje: e.target.value })}
+                                        placeholder="¿En qué podemos ayudarte?"
+                                        required
+                                        rows={4}
+                                        className="bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition resize-none"
+                                    />
+                                </div>
+                                <button type="submit" className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition shadow-lg shadow-emerald-600/20 active:scale-[0.98] flex items-center justify-center gap-2 text-lg">
+                                    Enviar Mensaje <FiArrowRight />
+                                </button>
+                            </form>
                         </div>
                     </div>
                 </section>
