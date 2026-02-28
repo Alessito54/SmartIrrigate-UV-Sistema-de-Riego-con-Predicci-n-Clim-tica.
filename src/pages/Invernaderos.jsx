@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ref, set, push, remove, onValue } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
+import { isModuleOnline, linkModuloToInvernadero, unlinkModulo } from "../services/modulos";
 import {
     FiPlus, FiCheckCircle, FiLayers, FiLink, FiSettings,
     FiChevronDown, FiChevronUp, FiDroplet, FiShield,
@@ -77,7 +78,7 @@ function ControlToggle({ label, icon: Icon, color, active, onToggle, disabled })
 
 // ─── Section card ──────────────────────────────────────────────────────────
 function SeccionCard({ invId, secId, sec, inv, onReload }) {
-    const { user } = useAuth();
+    const { user, modulos } = useAuth();
 
     // Manual controls
     const [riego, setRiego] = useState(sec?.control?.riego ?? false);
@@ -88,11 +89,6 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     const [showConfig, setShowConfig] = useState(false);
     const [cultivo, setCultivo] = useState(sec?.cultivoActual || "");
     const [showCrops, setShowCrops] = useState(false);
-
-    // ESP32
-    const [espId, setEspId] = useState("");
-    const [linking, setLinking] = useState(false);
-    const [linkSuccess, setLinkSuccess] = useState(false);
 
     // Auto mode
     const [autoConfig, setAutoConfig] = useState(null);
@@ -192,16 +188,6 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
         await set(ref(db, `${secPath}/emoji`), emoji);
     }
 
-    async function vincularEsp() {
-        if (!espId.trim()) return;
-        setLinking(true);
-        try {
-            await set(ref(db, `${secPath}/espId`), espId.trim());
-            setLinkSuccess(true);
-            setTimeout(() => setLinkSuccess(false), 3000);
-        } finally { setLinking(false); }
-    }
-
     async function guardarAutoConfig() {
         setSavingAuto(true);
         try { await set(ref(db, `${secPath}/controlAutomatico`), autoConfig); }
@@ -225,7 +211,8 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     }
 
     const sensors = sec?.sensores || {};
-    const isOnline = inv?.estado?.online ?? false;
+    const linkedMId = inv?.moduloId;
+    const isOnline = linkedMId ? isModuleOnline(modulos[linkedMId]) : false;
     const presetEntries = Object.entries(presets);
 
     return (
@@ -362,30 +349,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                             )}
                         </div>
 
-                        {/* ESP32 */}
-                        <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">📡 Vincular ESP32</p>
-                            {sec?.espId ? (
-                                <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5">
-                                    <FiCheckCircle className="text-emerald-500 flex-shrink-0" />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">ESP32 Vinculado</p>
-                                        <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 truncate">{sec.espId}</p>
-                                    </div>
-                                    <button onClick={() => { set(ref(db, `${secPath}/espId`), null); onReload(); }} className="text-red-400 hover:text-red-500 p-1"><FiX size={14} /></button>
-                                </div>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <input type="text" value={espId} onChange={(e) => setEspId(e.target.value)} placeholder="ID o MAC del ESP32..."
-                                        className="flex-1 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-emerald-500/40 transition" />
-                                    <button onClick={vincularEsp} disabled={linking || !espId.trim()}
-                                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1">
-                                        {linkSuccess ? <FiCheck /> : <FiLink />}
-                                        {linking ? "..." : linkSuccess ? "¡Listo!" : "Vincular"}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
+                        {/* El OASYS Módulo Climático se gestiona a nivel de invernadero */}
 
                         {/* ══ MODO AUTOMÁTICO ══ */}
                         {autoConfig && (
@@ -507,6 +471,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
 // ─── Invernadero card ──────────────────────────────────────────────────────
 function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete }) {
+    const { modulos } = useAuth();
     const secs = Object.entries(inv?.secciones || {});
     const [expanded, setExpanded] = useState(isActive);
     const [addingSection, setAddingSection] = useState(false);
@@ -516,6 +481,17 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
     const [draftName, setDraftName] = useState(inv?.nombre || "");
     const [savingName, setSavingName] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
+
+    // Module linking state
+    const linkedModuloId = inv?.moduloId || null;
+    const linkedModulo = linkedModuloId ? modulos[linkedModuloId] : null;
+    const moduleOnline = isModuleOnline(linkedModulo);
+    const freeModulos = Object.entries(modulos).filter(([, m]) =>
+        isModuleOnline(m) && (!m.invernaderoId || m.invernaderoId === invId)
+    );
+    const [selectedModuloId, setSelectedModuloId] = useState("");
+    const [moduloLinking, setModuloLinking] = useState(false);
+    const [moduloUnlinking, setModuloUnlinking] = useState(false);
 
     async function guardarNombre() {
         if (!draftName.trim()) return;
@@ -580,8 +556,8 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                                 </div>
                             )}
                             <div className="flex items-center gap-2 mt-0.5">
-                                <span className={`w-1.5 h-1.5 rounded-full ${inv?.estado?.online ? "bg-emerald-400 animate-pulse" : "bg-gray-300"}`} />
-                                <p className="text-xs text-gray-500">{inv?.estado?.online ? "En línea" : "Sin conexión"} · {secs.length} sección(es)</p>
+                                <span className={`w-1.5 h-1.5 rounded-full ${moduleOnline ? "bg-emerald-400 animate-pulse" : "bg-gray-300"}`} />
+                                <p className="text-xs text-gray-500">{moduleOnline ? "En línea" : "Sin conexión"} · {secs.length} sección(es)</p>
                             </div>
                         </div>
                     </div>
@@ -605,6 +581,78 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                 {/* Sections */}
                 {expanded && (
                     <div className="px-4 pb-4 pt-2 space-y-3">
+                        {/* ── OASYS Módulo Climático panel ── */}
+                        <div className="border border-gray-100 dark:border-slate-700/50 rounded-2xl p-3 bg-gray-50/50 dark:bg-slate-900/20">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+                                OASYS Módulo Climático
+                            </p>
+                            {linkedModuloId ? (
+                                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5">
+                                    <div className="flex items-center gap-2">
+                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${moduleOnline ? "bg-emerald-500 animate-pulse" : "bg-gray-400"}`} />
+                                        <div>
+                                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
+                                                {moduleOnline ? "Online" : "Offline"} · {linkedModuloId.length > 16 ? linkedModuloId.slice(0, 16) + "..." : linkedModuloId}
+                                            </p>
+                                            {linkedModulo?.ip && (
+                                                <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/70">
+                                                    IP: {linkedModulo.ip}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            setModuloUnlinking(true);
+                                            try { await unlinkModulo(linkedModuloId, invId); await onReload(); }
+                                            finally { setModuloUnlinking(false); }
+                                        }}
+                                        disabled={moduloUnlinking}
+                                        className="text-red-400 hover:text-red-500 p-1 transition disabled:opacity-50"
+                                        title="Desvincular módulo"
+                                    >
+                                        {moduloUnlinking ? "..." : <FiX size={14} />}
+                                    </button>
+                                </div>
+                            ) : freeModulos.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic py-1">
+                                    No hay módulos disponibles o conectados
+                                </p>
+                            ) : (
+                                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <select
+                                        value={selectedModuloId}
+                                        onChange={(e) => setSelectedModuloId(e.target.value)}
+                                        className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-2 py-2 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                                    >
+                                        <option value="">Seleccionar módulo...</option>
+                                        {freeModulos.map(([mId]) => (
+                                            <option key={mId} value={mId}>
+                                                {mId.length > 20 ? mId.slice(0, 20) + "..." : mId}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (!selectedModuloId) return;
+                                            setModuloLinking(true);
+                                            try {
+                                                await linkModuloToInvernadero(selectedModuloId, invId);
+                                                await onReload();
+                                                setSelectedModuloId("");
+                                            } finally { setModuloLinking(false); }
+                                        }}
+                                        disabled={moduloLinking || !selectedModuloId}
+                                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                        {moduloLinking ? "..." : <><FiLink size={12} /> Vincular</>}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
                         {secs.length === 0 && (
                             <p className="text-center text-sm text-gray-400 py-4">Sin secciones. Agrega una abajo.</p>
                         )}
@@ -685,7 +733,7 @@ export default function Invernaderos() {
                     <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight flex items-center gap-3">
                         <FiLayers size={32} className="text-emerald-500" /> Mis Invernaderos
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestiona secciones, cultivos, automatización y dispositivos ESP32.</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Gestiona secciones, cultivos, automatización y módulos OASYS.</p>
                 </div>
                 <button onClick={() => setAddingInv(!addingInv)}
                     className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition shadow-lg shadow-emerald-600/20">

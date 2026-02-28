@@ -4,6 +4,7 @@ import { FiHome, FiSettings, FiLogOut, FiChevronDown, FiLink, FiLayers, FiChevro
 import { PiPlantLight } from "react-icons/pi";
 import { LuClock } from "react-icons/lu";
 import { useAuth } from "../context/AuthContext";
+import { isModuleOnline } from "../services/modulos";
 import { PROJECT_LOGO } from "../config";
 
 const menu = [
@@ -16,7 +17,7 @@ const menu = [
 ];
 
 function GreenhouseSelector() {
-  const { invernaderos, invId, secId, selectInvernadero, selectSeccion } = useAuth();
+  const { invernaderos, invId, secId, selectInvernadero, selectSeccion, modulos } = useAuth();
   const [open, setOpen] = useState(false);
 
   const currentInv = invId ? invernaderos[invId] : null;
@@ -49,10 +50,12 @@ function GreenhouseSelector() {
         <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
           {invEntries.map(([id, inv]) => {
             const secs = Object.entries(inv?.secciones || {});
+            const invMId = inv?.moduloId;
+            const invOnline = invMId ? isModuleOnline(modulos[invMId]) : false;
             return (
               <div key={id}>
                 <div className="px-3 py-2 bg-gray-50 dark:bg-slate-800 text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                  <span className={`w-1.5 h-1.5 rounded-full ${inv?.estado?.online ? "bg-emerald-400" : "bg-gray-400"}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${invOnline ? "bg-emerald-400" : "bg-gray-400"}`} />
                   🏠 {inv?.nombre || id.slice(-8)}
                 </div>
                 {secs.map(([sId, sec]) => (

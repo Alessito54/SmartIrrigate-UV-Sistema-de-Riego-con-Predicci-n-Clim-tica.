@@ -19,6 +19,20 @@
                     }
                 }
             }
+        },
+        "modulos": {
+            ".read": "auth !== null",
+            "$moduloId": {
+                "timestamp": {
+                    ".write": true
+                },
+                "ip": {
+                    ".write": true
+                },
+                "invernaderoId": {
+                    ".write": "auth !== null && (newData.val() === null || root.child('usuarios/' + auth.uid + '/invernaderos/' + newData.val()).exists()) && (data.val() === null || !data.exists() || root.child('usuarios/' + auth.uid + '/invernaderos/' + data.val()).exists())"
+                }
+            }
         }
     }
 }

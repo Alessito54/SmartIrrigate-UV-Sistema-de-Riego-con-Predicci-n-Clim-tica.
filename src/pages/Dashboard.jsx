@@ -5,6 +5,7 @@ import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { obtenerPronostico } from "../services/weather";
 import { generarPrediccionIA } from "../services/iaLocal";
+import { isModuleOnline, getModuloLocation } from "../services/modulos";
 
 import {
   WiHumidity,
@@ -461,15 +462,20 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { sectionPath, invPath, invId, secId, invernaderos, selectInvernadero, selectSeccion } = useAuth();
+  const { sectionPath, invPath, invId, secId, invernaderos, selectInvernadero, selectSeccion, modulos } = useAuth();
   const navigate = useNavigate();
   const [sensores, setSensores] = useState(null);
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
-  const [online, setOnline] = useState(null);
   const [clima, setClima] = useState(null);
   const [ia, setIa] = useState(null);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const [moduloLocation, setModuloLocation] = useState(null);
+
+  // Estado derivado del módulo OASYS (sin listener propio: usa el de AuthContext)
+  const moduloId = invId ? invernaderos[invId]?.moduloId : null;
+  const moduloData = moduloId ? modulos[moduloId] : null;
+  const moduleOnline = isModuleOnline(moduloData);
 
   // Firebase listeners
   useEffect(() => {
@@ -478,7 +484,6 @@ export default function Dashboard() {
       onValue(ref(db, `${sectionPath}/sensores`), (s) => setSensores(s.val())),
       onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val())),
       onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val())),
-      onValue(ref(db, `${invPath}/estado/online`), (s) => setOnline(s.val()))
     ];
     return () => unsubs.forEach((unsub) => unsub());
   }, [sectionPath, invPath]);
@@ -528,6 +533,16 @@ export default function Dashboard() {
     cargarClima();
     return () => { cancelled = true; };
   }, []);
+
+  // Geolocalización del módulo OASYS por IP
+  useEffect(() => {
+    if (!moduloData?.ip) { setModuloLocation(null); return; }
+    let cancelled = false;
+    getModuloLocation(moduloData.ip).then((loc) => {
+      if (!cancelled) setModuloLocation(loc);
+    });
+    return () => { cancelled = true; };
+  }, [moduloData?.ip]);
 
   // IA prediction (debounced 500ms)
   useEffect(() => {
@@ -608,10 +623,12 @@ export default function Dashboard() {
                   <div className="absolute top-full right-0 mt-1 z-50 w-64 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
                     {invEntries.map(([iId, inv]) => {
                       const secs = Object.entries(inv?.secciones || {});
+                      const iMId = inv?.moduloId;
+                      const iOnline = iMId ? isModuleOnline(modulos[iMId]) : false;
                       return (
                         <div key={iId}>
                           <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-                            <span className={`w-1.5 h-1.5 rounded-full ${inv?.estado?.online ? "bg-emerald-400" : "bg-gray-400"}`} />
+                            <span className={`w-1.5 h-1.5 rounded-full ${iOnline ? "bg-emerald-400" : "bg-gray-400"}`} />
                             🏠 {inv?.nombre || iId.slice(-8)}
                           </div>
                           {secs.map(([sId, s]) => {
@@ -640,20 +657,20 @@ export default function Dashboard() {
           {/* Status chips */}
           <div className="flex flex-wrap gap-2">
             <StatusChip
-              active={online}
+              active={moduleOnline}
               activeClass="border-emerald-200/60 text-emerald-700 dark:border-emerald-700/40 dark:text-emerald-300"
               inactiveClass="border-red-200/60 text-red-700 dark:border-red-700/40 dark:text-red-300"
             >
               <span
                 className={`
                 h-1.5 w-1.5 rounded-full
-                ${online
+                ${moduleOnline
                     ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)] animate-breathe"
                     : "bg-red-400"
                   }
               `}
               />
-              {online ? "ESP32 online" : "ESP32 offline"}
+              {moduleOnline ? "Módulo online" : "Módulo offline"}
             </StatusChip>
 
             <StatusChip
@@ -695,7 +712,12 @@ export default function Dashboard() {
                   Variables del invernadero
                 </h2>
                 <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                  Datos en tiempo real · ESP32
+                  Datos en tiempo real · OASYS Módulo Climático
+                  {moduloLocation && (
+                    <span className="ml-2 text-[10px] text-sky-500">
+                      · Módulo en {moduloLocation.city}, {moduloLocation.country}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -734,12 +756,12 @@ export default function Dashboard() {
 
           <div className="space-y-3">
             <StatusCard
-              title="ESP32"
+              title="OASYS Módulo Climático"
               icon={<FiWifi className="text-2xl text-emerald-500" />}
-              accentColor={online ? "border-l-emerald-500" : "border-l-red-400"}
-              isActive={online}
-              status={online ? "Conectado" : "Sin conexión"}
-              description={online ? "Módulo enviando datos en tiempo real" : "Verifica la alimentación del módulo"}
+              accentColor={moduleOnline ? "border-l-emerald-500" : "border-l-red-400"}
+              isActive={moduleOnline}
+              status={moduleOnline ? "Conectado" : "Sin conexión"}
+              description={moduleOnline ? "Módulo enviando datos en tiempo real" : "Verifica la alimentación del módulo"}
             />
 
             <StatusCard

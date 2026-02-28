@@ -8,7 +8,7 @@ import {
     sendPasswordResetEmail,
     signOut,
 } from "firebase/auth";
-import { ref, get, set } from "firebase/database";
+import { ref, get, set, onValue } from "firebase/database";
 import { auth, db } from "../services/firebase";
 
 const googleProvider = new GoogleAuthProvider();
@@ -28,6 +28,7 @@ export function AuthProvider({ children }) {
     const [invId, setInvId] = useState(null);
     const [secId, setSecId] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [modulos, setModulos] = useState({});
 
     useEffect(() => {
         const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -75,6 +76,18 @@ export function AuthProvider({ children }) {
         });
         return () => unsub();
     }, []);
+
+    // Listener en tiempo real para todos los módulos OASYS
+    useEffect(() => {
+        if (!user) {
+            setModulos({});
+            return;
+        }
+        const unsub = onValue(ref(db, "modulos"), (snap) => {
+            setModulos(snap.val() || {});
+        });
+        return () => unsub();
+    }, [user]);
 
     // Switch to a specific invernadero: auto-select first section
     function selectInvernadero(id) {
@@ -164,6 +177,7 @@ export function AuthProvider({ children }) {
         currentSection,
         currentInvernadero,
         loading,
+        modulos,
         selectInvernadero,
         selectSeccion,
         reloadInvernaderos,

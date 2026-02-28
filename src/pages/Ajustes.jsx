@@ -2,11 +2,12 @@ import { useState, useEffect } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
+import { isModuleOnline } from "../services/modulos";
 import { FiUser, FiMoon, FiSun, FiLayers, FiChevronRight, FiLogOut } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
 export default function Ajustes() {
-  const { user, userData, invernaderos, invId, secId, selectInvernadero, selectSeccion, logout } = useAuth();
+  const { user, userData, invernaderos, invId, secId, selectInvernadero, selectSeccion, logout, modulos } = useAuth();
   const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
@@ -108,7 +109,7 @@ export default function Ajustes() {
                 <div key={id} className={`rounded-2xl border-2 overflow-hidden transition ${isActiveInv ? "border-emerald-400/50" : "border-gray-100 dark:border-slate-700"}`}>
                   <div className="flex items-center justify-between px-4 py-3 bg-white/50 dark:bg-slate-800/50">
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${inv?.estado?.online ? "bg-emerald-400 animate-pulse" : "bg-gray-300"}`} />
+                      <span className={`w-2 h-2 rounded-full ${isModuleOnline(modulos[inv?.moduloId]) ? "bg-emerald-400 animate-pulse" : "bg-gray-300"}`} />
                       <p className="text-sm font-bold text-gray-800 dark:text-gray-100">
                         {inv?.nombre || `Invernadero ${id.slice(-6)}`}
                       </p>
