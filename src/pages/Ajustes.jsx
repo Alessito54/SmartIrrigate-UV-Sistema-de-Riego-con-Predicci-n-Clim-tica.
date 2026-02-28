@@ -2,10 +2,12 @@ import { useState, useEffect } from "react";
 import { ref, set } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
-import { FiUser, FiMoon, FiSun, FiLayers, FiChevronRight } from "react-icons/fi";
+import { FiUser, FiMoon, FiSun, FiLayers, FiChevronRight, FiLogOut } from "react-icons/fi";
+import { useNavigate } from "react-router-dom";
 
 export default function Ajustes() {
-  const { user, userData, invernaderos, invId, secId, selectInvernadero, selectSeccion } = useAuth();
+  const { user, userData, invernaderos, invId, secId, selectInvernadero, selectSeccion, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("theme") === "dark");
   const [nombre, setNombre] = useState(userData?.nombre || "");
@@ -168,9 +170,23 @@ export default function Ajustes() {
         </div>
       </section>
 
+      {/* Logout Button (For Mobile Accessibility) */}
+      <section className="glass rounded-3xl p-6">
+        <button
+          onClick={async () => {
+            await logout();
+            navigate("/login");
+          }}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-bold hover:bg-red-100 dark:hover:bg-red-900/40 transition active:scale-[0.98]"
+        >
+          <FiLogOut size={18} />
+          Cerrar sesión
+        </button>
+      </section>
+
       {/* App info */}
       <section className="glass rounded-3xl p-6 text-center space-y-1">
-        <p className="text-xs text-gray-400">SmartIrrigate UV · v2.0</p>
+        <p className="text-xs text-gray-400">O.A.S.Y.S · v2.0</p>
         <p className="text-xs text-gray-300 dark:text-gray-600">Sistema de riego inteligente con predicción climática</p>
       </section>
     </div>

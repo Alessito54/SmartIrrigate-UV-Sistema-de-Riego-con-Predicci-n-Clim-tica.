@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { FiArrowRight, FiCheckCircle, FiTarget, FiShield, FiBookOpen, FiMenu, FiX, FiChevronLeft, FiChevronRight, FiMail } from "react-icons/fi";
 import { FaScaleBalanced, FaHandshakeAngle, FaFacebookF, FaInstagram, FaTiktok } from "react-icons/fa6";
 import { HiOutlineLightBulb } from "react-icons/hi";
-import { PROJECT_NAME, PROJECT_LOGO, SOCIAL_FACEBOOK, SOCIAL_INSTAGRAM, SOCIAL_TIKTOK, CONTACT_EMAIL } from "../config";
+import { PROJECT_NAME, PROJECT_LOGO, SOCIAL_FACEBOOK, SOCIAL_INSTAGRAM, SOCIAL_TIKTOK, CONTACT_EMAIL, PROMO_VIDEO_URL } from "../config";
 import campoAgricola from '../assets/images/campo-agricola.jpg';
 import monitoreo from '../assets/images/monitor.jpg';
 import campoAgricola2 from '../assets/images/campo-agricola2.jpg';
@@ -60,6 +60,7 @@ export default function Landing() {
     const navLinks = [
         { name: "Inicio", href: "#inicio" },
         { name: "Descubre", href: "#carrusel" },
+        { name: "Video", href: "#video-promo" },
         { name: "Quiénes Somos", href: "#nosotros" },
         { name: "Normas", href: "#normas" },
         { name: "Contacto", href: "#contacto" },
@@ -144,6 +145,45 @@ export default function Landing() {
                                 {carouselSlides.map((_, i) => (
                                     <button key={i} onClick={() => setCurrentSlide(i)} className={`h-3 rounded-full transition-all ${currentSlide === i ? 'w-12 bg-emerald-500' : 'w-3 bg-white/50'}`} />
                                 ))}
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                {/* VIDEO PROMOCIONAL */}
+                <section id="video-promo" className="py-24 bg-emerald-900/5 dark:bg-emerald-900/10 relative overflow-hidden">
+                    <div className="max-w-6xl mx-auto px-4 relative z-10">
+                        <div className="text-center mb-12">
+                            <h2 className="text-4xl md:text-5xl font-black mb-4 uppercase text-emerald-800 dark:text-emerald-400">
+                                Conoce <span className="text-slate-900 dark:text-white">O.A.S.Y.S</span> en acción
+                            </h2>
+                            <p className="text-xl text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
+                                Descubre cómo nuestro sistema inteligente transforma y optimiza el riego agrícola con tecnología de vanguardia.
+                            </p>
+                        </div>
+
+                        <div className="relative max-w-5xl mx-auto group">
+                            <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500 to-sky-500 rounded-3xl blur opacity-25 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+                            <div className="relative glass rounded-3xl overflow-hidden shadow-2xl bg-slate-900 ring-1 ring-slate-800/50 aspect-video flex items-center justify-center">
+                                {PROMO_VIDEO_URL ? (
+                                    <iframe
+                                        src={PROMO_VIDEO_URL}
+                                        title="O.A.S.Y.S Promo"
+                                        className="w-full h-full border-0 absolute inset-0"
+                                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                        allowFullScreen>
+                                    </iframe>
+                                ) : (
+                                    <div className="text-center p-8 relative z-10">
+                                        <div className="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex justify-center items-center mx-auto mb-4 border border-emerald-500/30">
+                                            <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                                        </div>
+                                        <h3 className="text-2xl font-bold text-white mb-2">Video Promocional</h3>
+                                        <p className="text-slate-400">
+                                            Agrega el enlace en <code>src/config.js</code> en la variable <code>PROMO_VIDEO_URL</code>.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>

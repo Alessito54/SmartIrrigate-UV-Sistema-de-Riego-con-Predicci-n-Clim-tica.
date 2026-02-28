@@ -114,7 +114,7 @@ export default function Layout({ children }) {
             </div>
             <div>
               <p className="font-extrabold text-sm text-gray-900 dark:text-gray-50 leading-none">SmartIrrigate</p>
-              <p className="text-[10px] text-gray-400 leading-none mt-0.5">UV · Sistema de Riego</p>
+              <p className="text-[10px] text-gray-400 leading-none mt-0.5">· Sistema de Riego</p>
             </div>
           </div>
 
