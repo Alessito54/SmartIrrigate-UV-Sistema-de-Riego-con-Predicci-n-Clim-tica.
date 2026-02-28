@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ref, onValue } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
@@ -15,7 +16,7 @@ import {
   WiDayCloudy,
   WiNightClear
 } from "react-icons/wi";
-import { FiWifi, FiShield } from "react-icons/fi";
+import { FiWifi, FiShield, FiChevronDown } from "react-icons/fi";
 import { IoSparklesOutline } from "react-icons/io5";
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -460,13 +461,15 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { sectionPath, invPath } = useAuth();
+  const { sectionPath, invPath, invId, secId, invernaderos, selectInvernadero, selectSeccion } = useAuth();
+  const navigate = useNavigate();
   const [sensores, setSensores] = useState(null);
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
   const [online, setOnline] = useState(null);
   const [clima, setClima] = useState(null);
   const [ia, setIa] = useState(null);
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
 
   // Firebase listeners
   useEffect(() => {
@@ -581,40 +584,94 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Status chips */}
-        <div className="flex flex-wrap gap-2 justify-start sm:justify-end">
-          <StatusChip
-            active={online}
-            activeClass="border-emerald-200/60 text-emerald-700 dark:border-emerald-700/40 dark:text-emerald-300"
-            inactiveClass="border-red-200/60 text-red-700 dark:border-red-700/40 dark:text-red-300"
-          >
-            <span
-              className={`
+        <div className="flex flex-col items-start sm:items-end gap-2">
+          {/* Active section switcher dropdown */}
+          {(() => {
+            const sec = invId && secId ? invernaderos?.[invId]?.secciones?.[secId] : null;
+            const invName = invId ? (invernaderos?.[invId]?.nombre || invId.slice(-8)) : null;
+            const invEntries = Object.entries(invernaderos || {});
+            return (
+              <div className="relative">
+                <button
+                  onClick={() => setSectionDropdownOpen(!sectionDropdownOpen)}
+                  className="flex items-center gap-2.5 bg-white/60 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 hover:border-emerald-400 transition"
+                >
+                  <span className="text-xl">{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                  <div className="text-left">
+                    <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Sección activa</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{sec?.nombre || (secId ? secId.slice(-6) : "Seleccionar")}</p>
+                    {invName && <p className="text-[10px] text-gray-400">{invName}</p>}
+                  </div>
+                  <FiChevronDown className={`text-gray-400 transition ml-1 ${sectionDropdownOpen ? "rotate-180" : ""}`} size={14} />
+                </button>
+                {sectionDropdownOpen && (
+                  <div className="absolute top-full right-0 mt-1 z-50 w-64 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+                    {invEntries.map(([iId, inv]) => {
+                      const secs = Object.entries(inv?.secciones || {});
+                      return (
+                        <div key={iId}>
+                          <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                            <span className={`w-1.5 h-1.5 rounded-full ${inv?.estado?.online ? "bg-emerald-400" : "bg-gray-400"}`} />
+                            🏠 {inv?.nombre || iId.slice(-8)}
+                          </div>
+                          {secs.map(([sId, s]) => {
+                            const isActive = invId === iId && secId === sId;
+                            return (
+                              <button
+                                key={sId}
+                                onClick={() => { selectInvernadero(iId); selectSeccion(sId); setSectionDropdownOpen(false); }}
+                                className={`w-full text-left px-5 py-2.5 text-sm flex items-center gap-2 transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 ${isActive ? "text-emerald-600 font-bold bg-emerald-50/50 dark:bg-emerald-900/10" : "text-gray-700 dark:text-gray-300"}`}
+                              >
+                                <span>{s?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                                {s?.nombre || sId}
+                                {isActive && <span className="ml-auto text-[10px] font-bold text-emerald-500">✓</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Status chips */}
+          <div className="flex flex-wrap gap-2">
+            <StatusChip
+              active={online}
+              activeClass="border-emerald-200/60 text-emerald-700 dark:border-emerald-700/40 dark:text-emerald-300"
+              inactiveClass="border-red-200/60 text-red-700 dark:border-red-700/40 dark:text-red-300"
+            >
+              <span
+                className={`
                 h-1.5 w-1.5 rounded-full
                 ${online
-                  ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)] animate-breathe"
-                  : "bg-red-400"
-                }
+                    ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.7)] animate-breathe"
+                    : "bg-red-400"
+                  }
               `}
-            />
-            {online ? "ESP32 online" : "ESP32 offline"}
-          </StatusChip>
+              />
+              {online ? "ESP32 online" : "ESP32 offline"}
+            </StatusChip>
 
-          <StatusChip
-            active={riego}
-            activeClass="border-sky-200/60 text-sky-700 dark:border-sky-700/40 dark:text-sky-300"
-            inactiveClass="border-gray-200/60 text-gray-500 dark:border-gray-700/40 dark:text-gray-400"
-          >
-            <WiRaindrop className="text-base" /> {riego ? "Riego activo" : "Riego off"}
-          </StatusChip>
+            <StatusChip
+              active={riego}
+              activeClass="border-sky-200/60 text-sky-700 dark:border-sky-700/40 dark:text-sky-300"
+              inactiveClass="border-gray-200/60 text-gray-500 dark:border-gray-700/40 dark:text-gray-400"
+            >
+              <WiRaindrop className="text-base" /> {riego ? "Riego activo" : "Riego off"}
+            </StatusChip>
 
-          <StatusChip
-            active={malla}
-            activeClass="border-amber-200/60 text-amber-700 dark:border-amber-700/40 dark:text-amber-300"
-            inactiveClass="border-gray-200/60 text-gray-500 dark:border-gray-700/40 dark:text-gray-400"
-          >
-            <FiShield className="text-xs" /> Malla {malla ? "abierta" : "cerrada"}
-          </StatusChip>
+            <StatusChip
+              active={malla}
+              activeClass="border-amber-200/60 text-amber-700 dark:border-amber-700/40 dark:text-amber-300"
+              inactiveClass="border-gray-200/60 text-gray-500 dark:border-gray-700/40 dark:text-gray-400"
+            >
+              <FiShield className="text-xs" /> Malla {malla ? "abierta" : "cerrada"}
+            </StatusChip>
+          </div>
         </div>
       </header>
 

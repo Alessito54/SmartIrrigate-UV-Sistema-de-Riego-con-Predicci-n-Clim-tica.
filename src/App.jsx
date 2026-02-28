@@ -4,12 +4,12 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Control from "./pages/Control";
 import Ajustes from "./pages/Ajustes";
 import Cultivos from "./pages/Cultivos";
 import Historial from "./pages/Historial";
-import Automatico from "./pages/Automatico";
 import Landing from "./pages/Landing";
+import Invernaderos from "./pages/Invernaderos";
+import Vinculacion from "./pages/Vinculacion";
 
 export default function App() {
   return (
@@ -27,11 +27,11 @@ export default function App() {
               <Layout>
                 <Routes>
                   <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/control" element={<Control />} />
                   <Route path="/ajustes" element={<Ajustes />} />
                   <Route path="/cultivos" element={<Cultivos />} />
                   <Route path="/historial" element={<Historial />} />
-                  <Route path="/automatico" element={<Automatico />} />
+                  <Route path="/invernaderos" element={<Invernaderos />} />
+                  <Route path="/vinculacion" element={<Vinculacion />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>
