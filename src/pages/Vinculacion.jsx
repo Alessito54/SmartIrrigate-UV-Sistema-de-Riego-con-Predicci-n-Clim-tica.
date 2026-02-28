@@ -6,7 +6,7 @@ import {
     unlinkModulo,
     getModuloLocation,
 } from "../services/modulos";
-import { FiLink, FiCheckCircle, FiAlertTriangle, FiWifi, FiWifiOff, FiX } from "react-icons/fi";
+import { FiLink, FiCheckCircle, FiAlertTriangle, FiWifi, FiWifiOff, FiX, FiRadio, FiRefreshCw } from "react-icons/fi";
 
 export default function Vinculacion() {
     const { invernaderos, modulos, reloadInvernaderos } = useAuth();
@@ -16,6 +16,8 @@ export default function Vinculacion() {
     const [unlinkingId, setUnlinkingId] = useState(null);
     const [status, setStatus] = useState(null);
     const [locations, setLocations] = useState({}); // { [ip]: locationObj }
+    const [scanning, setScanning] = useState(false);
+    const [scanDone, setScanDone] = useState(false);
 
     // Derived data
     const moduloEntries = Object.entries(modulos);
@@ -74,18 +76,67 @@ export default function Vinculacion() {
         } finally { setUnlinkingId(null); }
     }
 
+    async function handleScan() {
+        if (scanning) return;
+        setScanning(true);
+        setScanDone(false);
+        setStatus(null);
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        setScanning(false);
+        setScanDone(true);
+        setTimeout(() => setScanDone(false), 5000);
+    }
+
+    const onlineCount = moduloEntries.filter(([, m]) => isModuleOnline(m)).length;
+
     return (
         <div className="max-w-5xl mx-auto space-y-8 animate-fadeUp">
             {/* Header */}
-            <header>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight flex items-center gap-3">
-                    <FiLink size={32} className="text-emerald-500" />
-                    Vincular OASYS Módulo Climático
-                </h1>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Asocia un módulo físico a uno de tus invernaderos. El módulo debe estar encendido y conectado a Internet.
-                </p>
+            <header className="flex items-end justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight flex items-center gap-3">
+                        <FiLink size={32} className="text-emerald-500" />
+                        Vincular OASYS Módulo Climático
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Asocia un módulo físico a uno de tus invernaderos. El módulo debe estar encendido y conectado a Internet.
+                    </p>
+                </div>
+                <button
+                    onClick={handleScan}
+                    disabled={scanning}
+                    className="flex-shrink-0 flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition shadow-lg shadow-emerald-600/20 disabled:opacity-70"
+                >
+                    <FiRadio size={15} className={scanning ? "animate-pulse" : ""} />
+                    {scanning ? "Buscando..." : "Buscar OASYS"}
+                </button>
             </header>
+
+            {/* Scanning animation banner */}
+            {scanning && (
+                <div className="flex items-center gap-4 px-5 py-4 bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl animate-fadeUp">
+                    <div className="relative w-9 h-9 flex-shrink-0 flex items-center justify-center">
+                        <span className="absolute inset-0 rounded-full border-2 border-emerald-500 animate-ping opacity-60" />
+                        <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-40" style={{ animationDelay: "0.4s" }} />
+                        <span className="absolute inset-0 rounded-full border-2 border-emerald-300 animate-ping opacity-20" style={{ animationDelay: "0.8s" }} />
+                        <FiRadio size={14} className="text-emerald-600 dark:text-emerald-400 relative z-10" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">Escaneando la red...</p>
+                        <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70">Buscando módulos OASYS conectados a Internet</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Scan result banner */}
+            {scanDone && !scanning && (
+                <div className="flex items-center gap-3 px-5 py-3 bg-sky-50 dark:bg-sky-900/30 border border-sky-200 dark:border-sky-800 rounded-2xl text-sky-700 dark:text-sky-300 animate-fadeUp">
+                    <FiRefreshCw size={15} className="flex-shrink-0" />
+                    <p className="text-sm font-medium">
+                        Escaneo completado — <span className="font-bold">{onlineCount}</span> módulo{onlineCount !== 1 ? "s" : ""} online detectado{onlineCount !== 1 ? "s" : ""}
+                    </p>
+                </div>
+            )}
 
             {/* Status banner */}
             {status && (

@@ -300,7 +300,7 @@ const ForecastPill = memo(function ForecastPill({ d, index }) {
   );
 });
 
-const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate }) {
+const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate, title }) {
   return (
     <div
       className="
@@ -310,6 +310,14 @@ const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate }) {
         shadow-lg
       "
     >
+      {/* Title badge */}
+      {title && (
+        <div className="absolute top-4 right-4 z-10">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 bg-white/60 dark:bg-slate-800/60 backdrop-blur px-2.5 py-1 rounded-full border border-gray-200/50 dark:border-slate-700/50">
+            {title}
+          </span>
+        </div>
+      )}
       {/* Decorative halos */}
       <div className="pointer-events-none absolute -top-20 -right-20 w-60 h-60 rounded-full bg-emerald-400/10 dark:bg-emerald-400/5 blur-[80px]" />
       <div className="pointer-events-none absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-sky-400/10 dark:bg-sky-400/5 blur-[60px]" />
@@ -459,6 +467,46 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
   );
 });
 
+// ─── OASYS offline placeholder ────────────────────────────────────────
+
+const OASYSOfflinePanel = memo(function OASYSOfflinePanel() {
+  return (
+    <div className="relative rounded-3xl overflow-hidden shadow-lg">
+      {/* Blurred skeleton underneath */}
+      <div className="blur-sm saturate-50 pointer-events-none select-none">
+        <div className="glass rounded-3xl p-6 sm:p-8 animate-pulse">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gray-200/60 dark:bg-gray-700/40" />
+              <div className="space-y-2.5">
+                <div className="w-44 h-5 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+                <div className="w-32 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+                <div className="w-48 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="space-y-1.5">
+                  <div className="w-20 h-3 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+                  <div className="w-14 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Overlay message */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl px-8 py-5 text-center shadow-2xl border border-gray-200/50 dark:border-slate-700/50">
+          <p className="text-3xl mb-2">📡</p>
+          <p className="text-sm font-bold text-gray-700 dark:text-gray-300">OASYS Módulo Climático</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Sin módulo activo</p>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Dashboard() {
@@ -468,6 +516,7 @@ export default function Dashboard() {
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
   const [clima, setClima] = useState(null);
+  const [moduloClima, setModuloClima] = useState(null);
   const [ia, setIa] = useState(null);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
   const [moduloLocation, setModuloLocation] = useState(null);
@@ -543,6 +592,19 @@ export default function Dashboard() {
     });
     return () => { cancelled = true; };
   }, [moduloData?.ip]);
+
+  // Clima en la ubicación del módulo OASYS
+  useEffect(() => {
+    if (!moduloLocation || !moduleOnline) { setModuloClima(null); return; }
+    let cancelled = false;
+    obtenerPronostico(moduloLocation.lat, moduloLocation.lon).then((datos) => {
+      if (!cancelled) {
+        datos.ciudad = `${moduloLocation.city}`;
+        setModuloClima(datos);
+      }
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [moduloLocation, moduleOnline]);
 
   // IA prediction (debounced 500ms)
   useEffect(() => {
@@ -692,12 +754,24 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ═══ WEATHER HERO ═══ */}
-      {clima ? (
-        <WeatherPanel clima={clima} formattedDate={formattedDate} />
-      ) : (
-        <SkeletonClima />
-      )}
+      {/* ═══ WEATHER PANELS ═══ */}
+      <div className={`grid gap-6 ${moduloId ? "xl:grid-cols-2" : ""}`}>
+        {/* Panel usuario */}
+        {clima ? (
+          <WeatherPanel clima={clima} formattedDate={formattedDate} title="Tu ubicación" />
+        ) : (
+          <SkeletonClima />
+        )}
+
+        {/* Panel OASYS — solo si hay módulo vinculado */}
+        {moduloId && (
+          moduleOnline && moduloClima ? (
+            <WeatherPanel clima={moduloClima} formattedDate={formattedDate} title="📡 OASYS Módulo" />
+          ) : (
+            <OASYSOfflinePanel />
+          )
+        )}
+      </div>
 
       {/* ═══ MAIN GRID ═══ */}
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
