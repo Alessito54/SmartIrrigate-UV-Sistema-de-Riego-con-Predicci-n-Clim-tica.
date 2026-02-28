@@ -13,6 +13,18 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet" />
   <title>Lis — Riego Inteligente</title>
+  <!-- Dark mode: apply immediately before React renders to avoid white flash -->
+  <script>
+    (function () {
+      var theme = localStorage.getItem('theme');
+      if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    })();
+  </script>
 </head>
 
 <body>

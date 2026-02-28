@@ -599,7 +599,7 @@ export default function Dashboard() {
                   <span className="text-xl">{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
                   <div className="text-left">
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Sección activa</p>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{sec?.nombre || (secId ? secId.slice(-6) : "Seleccionar")}</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{sec?.nombre || (secId ? "Sección" : "Seleccionar")}</p>
                     {invName && <p className="text-[10px] text-gray-400">{invName}</p>}
                   </div>
                   <FiChevronDown className={`text-gray-400 transition ml-1 ${sectionDropdownOpen ? "rotate-180" : ""}`} size={14} />

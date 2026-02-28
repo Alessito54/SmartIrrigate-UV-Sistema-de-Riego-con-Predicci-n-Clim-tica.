@@ -1,0 +1,24 @@
+{
+    "rules": {
+        ".read": false,
+        ".write": false,
+        "usuarios": {
+            "$uid": {
+                ".read": "$uid === auth.uid",
+                ".write": "$uid === auth.uid"
+            }
+        },
+        "invernaderos": {
+            "$invId": {
+                ".read": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
+                ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
+                "secciones": {
+                    "$secId": {
+                        ".read": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
+                        ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                    }
+                }
+            }
+        }
+    }
+}
