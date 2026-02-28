@@ -773,7 +773,25 @@ export default function Dashboard() {
         )}
       </div>
 
+      {/* ═══ NO SECTION SELECTED ═══ */}
+      {!secId && (
+        <div className="glass rounded-3xl p-10 sm:p-14 text-center space-y-4 animate-fadeUp">
+          <p className="text-6xl">🌱</p>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Sin sección activa</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
+            Selecciona un invernadero y una sección desde el menú superior para comenzar a monitorear en tiempo real.
+          </p>
+          <button
+            onClick={() => navigate("/invernaderos")}
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition shadow-lg shadow-emerald-600/20 mt-2"
+          >
+            Ir a Invernaderos
+          </button>
+        </div>
+      )}
+
       {/* ═══ MAIN GRID ═══ */}
+      {secId && (
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
 
         {/* Left column: sensors + IA */}
@@ -814,7 +832,22 @@ export default function Dashboard() {
           </section>
 
           {/* IA Panel */}
-          {ia && <IAPanel ia={ia} />}
+          {ia ? (
+            <IAPanel ia={ia} />
+          ) : (clima && sensores) ? (
+            <div className="glass rounded-2xl p-5 animate-pulse">
+              <div className="flex items-center gap-2.5 mb-4">
+                <div className="w-5 h-5 rounded-full bg-violet-200/70 dark:bg-violet-700/40" />
+                <div className="w-40 h-4 rounded-full bg-violet-200/70 dark:bg-violet-700/40" />
+              </div>
+              <div className="space-y-2.5">
+                <div className="h-3 bg-gray-200/60 dark:bg-gray-700/40 rounded-full w-full" />
+                <div className="h-3 bg-gray-200/60 dark:bg-gray-700/40 rounded-full w-11/12" />
+                <div className="h-3 bg-gray-200/60 dark:bg-gray-700/40 rounded-full w-4/5" />
+                <div className="h-3 bg-gray-200/60 dark:bg-gray-700/40 rounded-full w-5/6" />
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {/* Right column: system status */}
@@ -859,50 +892,52 @@ export default function Dashboard() {
 
           {/* Quick summary card */}
           <div className="glass rounded-2xl p-4 mt-2">
-            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+            <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               Resumen rápido
             </h3>
-            <div className="space-y-2">
-              {sensores && (
-                <>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5"><WiThermometer className="text-base" /> Temp</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">
-                      {sensores.temperatura}°C
+            {sensores ? (
+              <div className="space-y-3">
+                {[
+                  { label: "Temp", Icon: WiThermometer, value: sensores.temperatura, unit: "°C", max: 50, bar: "bg-orange-400" },
+                  { label: "Humedad", Icon: WiRaindrop, value: sensores.humedad, unit: "%", max: 100, bar: "bg-blue-400" },
+                  { label: "UV", Icon: WiDaySunny, value: sensores.radiacion, unit: "W", max: 1200, bar: "bg-yellow-400" },
+                  { label: "Viento", Icon: WiStrongWind, value: sensores.viento, unit: "m/s", max: 20, bar: "bg-teal-400" },
+                ].map(({ label, Icon, value, unit, max, bar }) => (
+                  <div key={label}>
+                    <div className="flex items-center justify-between text-sm mb-1">
+                      <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <Icon className="text-base" /> {label}
+                      </span>
+                      <span className="font-bold text-gray-800 dark:text-gray-100">
+                        {value}<span className="text-[10px] font-normal text-gray-400 ml-0.5">{unit}</span>
+                      </span>
+                    </div>
+                    <div className="h-1 bg-gray-100 dark:bg-slate-700/60 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full ${bar} rounded-full transition-all duration-1000`}
+                        style={{ width: `${Math.min(100, Math.max(0, (value / max) * 100))}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                {clima && (
+                  <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200/30 dark:border-gray-700/30">
+                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
+                      <WiRain className="text-base" /> Lluvia
+                    </span>
+                    <span className="font-bold text-gray-800 dark:text-gray-100">
+                      {clima.lluvia_prob}<span className="text-[10px] font-normal text-gray-400 ml-0.5">%</span>
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5"><WiRaindrop className="text-base" /> Humedad</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">
-                      {sensores.humedad}%
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5"><WiDaySunny className="text-base" /> UV</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">
-                      {sensores.radiacion} W/m²
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5"><WiStrongWind className="text-base" /> Viento</span>
-                    <span className="font-semibold text-gray-800 dark:text-gray-100">
-                      {sensores.viento} m/s
-                    </span>
-                  </div>
-                </>
-              )}
-              {clima && (
-                <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200/30 dark:border-gray-700/30">
-                  <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5"><WiRain className="text-base" /> Lluvia</span>
-                  <span className="font-semibold text-gray-800 dark:text-gray-100">
-                    {clima.lluvia_prob}%
-                  </span>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 dark:text-gray-600 text-center py-3">Sin datos de sensores</p>
+            )}
           </div>
         </aside>
       </div>
+      )}
     </div>
   );
 }
