@@ -10,6 +10,9 @@ import Historial from "./pages/Historial";
 import Landing from "./pages/Landing";
 import Invernaderos from "./pages/Invernaderos";
 import Vinculacion from "./pages/Vinculacion";
+import Privacidad from "./pages/Privacidad";
+import TerminosUso from "./pages/TerminosUso";
+import DerechosAutor from "./pages/DerechosAutor";
 
 export default function App() {
   return (
@@ -18,6 +21,9 @@ export default function App() {
         {/* Public */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/privacidad" element={<Privacidad />} />
+        <Route path="/terminos" element={<TerminosUso />} />
+        <Route path="/derechos" element={<DerechosAutor />} />
 
         {/* Protected */}
         <Route
