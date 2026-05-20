@@ -1,4 +1,4 @@
-import { ref, onValue, update } from "firebase/database";
+import { ref, onValue, set } from "firebase/database";
 import { db } from "./firebase";
 
 // Módulo considerado online si su heartbeat llegó hace menos de 30 segundos
@@ -32,20 +32,16 @@ export function listenToModulos(callback) {
  * Actualiza módulo.invernaderoId e invernadero.moduloId en una sola operación.
  */
 export async function linkModuloToInvernadero(moduloId, invId) {
-  await update(ref(db), {
-    [`modulos/${moduloId}/invernaderoId`]: invId,
-    [`invernaderos/${invId}/moduloId`]: moduloId,
-  });
+  await set(ref(db, `modulos/${moduloId}/invernaderoId`), invId);
+  await set(ref(db, `invernaderos/${invId}/moduloId`), moduloId);
 }
 
 /**
  * Desvincula atómicamente un módulo de un invernadero.
  */
 export async function unlinkModulo(moduloId, invId) {
-  await update(ref(db), {
-    [`modulos/${moduloId}/invernaderoId`]: null,
-    [`invernaderos/${invId}/moduloId`]: null,
-  });
+  await set(ref(db, `modulos/${moduloId}/invernaderoId`), null);
+  await set(ref(db, `invernaderos/${invId}/moduloId`), null);
 }
 
 /**

@@ -292,17 +292,22 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                 </div>
 
                 {/* ══ SENSOR MINIBAR ══ */}
-                <div className="grid grid-cols-4 divide-x divide-gray-100 dark:divide-slate-700/50 px-1">
+                <div className="grid grid-cols-3 sm:grid-cols-6 divide-x divide-gray-100 dark:divide-slate-700/50 px-1">
                     {[
-                        { key: "temperatura", label: "Temp", unit: "°C", icon: "🌡️" },
-                        { key: "humedad", label: "Hum.", unit: "%", icon: "💧" },
-                        { key: "radiacion", label: "UV", unit: "W", icon: "☀️" },
-                        { key: "viento", label: "Viento", unit: "m/s", icon: "💨" },
+                        { key: "temperatura",      label: "T.Amb",   unit: "°C", icon: "🌡️" },
+                        { key: "humedadAmbiente",  label: "H.Amb",   unit: "%",  icon: "💨" },
+                        { key: "temperaturasuelo", label: "T.Suelo", unit: "°C", icon: "🪨" },
+                        { key: "humedad",           label: "H.Suelo", unit: "%",  icon: "💧" },
+                        { key: "radiacion",         label: "Rad.",    unit: "W/m²", icon: "☀️" },
+                        { key: "viento",            label: "Viento",  unit: "km/h", icon: "🌬️" },
                     ].map(({ key, label, unit, icon }) => (
                         <div key={key} className="flex flex-col items-center py-2.5 px-1">
                             <span className="text-base">{icon}</span>
                             <span className="text-[10px] font-bold text-gray-800 dark:text-gray-100 mt-0.5">
-                                {sensors[key] ?? "--"}<span className="font-normal text-gray-400 ml-0.5">{unit}</span>
+                                {sensors[key] !== undefined && sensors[key] !== null
+                                    ? Number(sensors[key]).toFixed(1)
+                                    : "--"}
+                                <span className="font-normal text-gray-400 ml-0.5">{unit}</span>
                             </span>
                             <span className="text-[9px] text-gray-400">{label}</span>
                         </div>

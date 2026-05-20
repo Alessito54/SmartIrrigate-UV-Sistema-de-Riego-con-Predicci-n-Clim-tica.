@@ -31,27 +31,35 @@ const unidades = {
 
 const iconMap = {
   temperatura: WiThermometer,
+  humedadAmbiente: WiHumidity,
+  temperaturasuelo: WiThermometer,
   humedad: WiHumidity,
   radiacion: WiDaySunny,
   viento: WiStrongWind
 };
 
 const sensorLabels = {
-  temperatura: "Temperatura",
-  humedad: "Humedad",
+  temperatura: "Temp. Ambiente",
+  humedadAmbiente: "Hum. Ambiente",
+  temperaturasuelo: "Temp. Suelo",
+  humedad: "Hum. Suelo",
   radiacion: "Radiación UV",
   viento: "Viento"
 };
 
 const sensorDescripciones = {
   temperatura:
-    "Mide el calor dentro del invernadero. Si sube demasiado, puede afectar a las plantas.",
+    "Temperatura del aire dentro del invernadero (SHT31). Si sube demasiado, puede afectar a las plantas.",
+  humedadAmbiente:
+    "Humedad relativa del ambiente (SHT31). Fundamental para evitar hongos o deshidratación.",
+  temperaturasuelo:
+    "Temperatura del sustrato o suelo (SHT10). Clave para el desarrollo de las raíces.",
   humedad:
-    "Cantidad de vapor de agua en el aire. Fundamental para evitar hongos o deshidratación.",
+    "Humedad del suelo o sustrato (SHT10). Decide cuándo activar el riego.",
   radiacion:
-    "Cuánta luz solar directa recibe el cultivo. Ayuda a decidir si abrir o cerrar la malla.",
+    "Radiación solar directa recibida. Ayuda a decidir si abrir o cerrar la malla.",
   viento:
-    "Velocidad del aire dentro del invernadero. Útil para la seguridad de la malla y mecanismos."
+    "Velocidad del aire. Útil para la seguridad de la malla y mecanismos."
 };
 
 // Gradient themes per sensor
@@ -61,6 +69,18 @@ const sensorThemes = {
     accent: "bg-orange-500",
     ring: "ring-orange-200/50 dark:ring-orange-800/30",
     iconBg: "bg-gradient-to-br from-orange-100 to-red-50 dark:from-orange-900/40 dark:to-red-900/30",
+  },
+  humedadAmbiente: {
+    gradient: "from-sky-500/10 via-cyan-500/5 to-blue-500/10 dark:from-sky-500/15 dark:via-cyan-500/10 dark:to-blue-900/20",
+    accent: "bg-sky-500",
+    ring: "ring-sky-200/50 dark:ring-sky-800/30",
+    iconBg: "bg-gradient-to-br from-sky-100 to-cyan-50 dark:from-sky-900/40 dark:to-cyan-900/30",
+  },
+  temperaturasuelo: {
+    gradient: "from-amber-500/10 via-yellow-500/5 to-orange-500/10 dark:from-amber-500/15 dark:via-yellow-500/10 dark:to-orange-900/20",
+    accent: "bg-amber-500",
+    ring: "ring-amber-200/50 dark:ring-amber-800/30",
+    iconBg: "bg-gradient-to-br from-amber-100 to-yellow-50 dark:from-amber-900/40 dark:to-yellow-900/30",
   },
   humedad: {
     gradient: "from-blue-500/10 via-sky-500/5 to-cyan-500/10 dark:from-blue-500/15 dark:via-sky-500/10 dark:to-cyan-900/20",
@@ -84,19 +104,23 @@ const sensorThemes = {
 
 // Ranges for gauge bar
 const sensorRanges = {
-  temperatura: { min: 0, max: 50 },
-  humedad: { min: 0, max: 100 },
-  radiacion: { min: 0, max: 1200 },
-  viento: { min: 0, max: 20 }
+  temperatura:      { min: 0, max: 50 },
+  humedadAmbiente:  { min: 0, max: 100 },
+  temperaturasuelo: { min: 0, max: 50 },
+  humedad:          { min: 0, max: 100 },
+  radiacion:        { min: 0, max: 1200 },
+  viento:           { min: 0, max: 20 }
 };
 
 function getColor(sensor, value) {
   switch (sensor) {
     case "temperatura":
+    case "temperaturasuelo":
       if (value < 10) return "text-blue-500 dark:text-blue-400";
       if (value < 30) return "text-emerald-600 dark:text-emerald-400";
       return "text-red-500 dark:text-red-400";
     case "humedad":
+    case "humedadAmbiente":
       if (value < 30) return "text-amber-500 dark:text-amber-400";
       if (value < 70) return "text-emerald-600 dark:text-emerald-400";
       return "text-blue-500 dark:text-blue-400";
@@ -116,10 +140,12 @@ function getColor(sensor, value) {
 function getBarColor(sensor, value) {
   switch (sensor) {
     case "temperatura":
+    case "temperaturasuelo":
       if (value < 10) return "bg-blue-400";
       if (value < 30) return "bg-emerald-400";
       return "bg-red-400";
     case "humedad":
+    case "humedadAmbiente":
       if (value < 30) return "bg-amber-400";
       if (value < 70) return "bg-emerald-400";
       return "bg-blue-400";
@@ -191,19 +217,23 @@ const SkeletonSensores = memo(function SkeletonSensores() {
 });
 
 const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, index }) {
+  const isOffline = value === null || value === undefined;
   const Icon = iconMap[sensorKey];
-  const color = getColor(sensorKey, value);
-  const barColor = getBarColor(sensorKey, value);
+  const color = isOffline ? "text-red-400 dark:text-red-400" : getColor(sensorKey, value);
+  const barColor = isOffline ? "bg-red-300" : getBarColor(sensorKey, value);
   const theme = sensorThemes[sensorKey];
   const range = sensorRanges[sensorKey];
-  const percent = Math.min(100, Math.max(0, ((value - range.min) / (range.max - range.min)) * 100));
+  const percent = isOffline ? 0 : Math.min(100, Math.max(0, ((value - range.min) / (range.max - range.min)) * 100));
 
   return (
     <div
       className={`
         relative overflow-hidden
-        bg-gradient-to-br ${theme.gradient}
-        glass ring-1 ${theme.ring}
+        bg-gradient-to-br ${isOffline
+          ? "from-red-500/5 via-red-400/5 to-red-500/10 dark:from-red-900/20 dark:via-red-800/10 dark:to-red-900/20"
+          : theme.gradient
+        }
+        glass ring-1 ${isOffline ? "ring-red-300/50 dark:ring-red-700/30" : theme.ring}
         p-5 rounded-2xl
         transition-all duration-500
         hover:shadow-xl hover:-translate-y-1
@@ -214,10 +244,10 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
       {/* Help button */}
       <button
         className="
-          absolute top-3 right-3 
-          w-6 h-6 rounded-full 
+          absolute top-3 right-3
+          w-6 h-6 rounded-full
           bg-white/60 dark:bg-slate-800/60
-          text-gray-500 dark:text-gray-400 
+          text-gray-500 dark:text-gray-400
           text-[11px] font-bold
           flex items-center justify-center
           opacity-0 group-hover/card:opacity-100
@@ -232,7 +262,11 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
 
       {/* Header: icon + label */}
       <div className="flex items-center gap-3 mb-3">
-        <div className={`${theme.iconBg} p-2 rounded-xl`}>
+        <div className={`${
+          isOffline
+            ? "bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/40 dark:to-red-900/30"
+            : theme.iconBg
+        } p-2 rounded-xl`}>
           <Icon className={`text-2xl ${color}`} />
         </div>
         <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -240,15 +274,29 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
         </span>
       </div>
 
-      {/* Value */}
-      <div className="mb-3">
-        <span className={`text-3xl sm:text-4xl font-extrabold tabular-nums ${color}`}>
-          {value}
-        </span>
-        <span className="text-sm font-medium text-gray-400 dark:text-gray-500 ml-1">
-          {unidades[sensorKey]}
-        </span>
-      </div>
+      {/* Value or offline state */}
+      {isOffline ? (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse flex-shrink-0" />
+            <span className="text-xs font-bold text-red-500 dark:text-red-400 uppercase tracking-wide">
+              Sin conexión
+            </span>
+          </div>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 leading-snug">
+            Sensor no detectado. Verifica las conexiones.
+          </p>
+        </div>
+      ) : (
+        <div className="mb-3">
+          <span className={`text-3xl sm:text-4xl font-extrabold tabular-nums ${color}`}>
+            {value}
+          </span>
+          <span className="text-sm font-medium text-gray-400 dark:text-gray-500 ml-1">
+            {unidades[sensorKey]}
+          </span>
+        </div>
+      )}
 
       {/* Gauge bar */}
       <div className="w-full h-1.5 rounded-full bg-gray-200/60 dark:bg-gray-700/30 overflow-hidden">
@@ -631,8 +679,13 @@ export default function Dashboard() {
     []
   );
 
+  // Solo mostrar las variables de sensor que conocemos (excluir flags y metadata)
+  const SENSOR_KEYS_CONOCIDAS = ["temperatura", "humedad", "humedadAmbiente", "temperaturasuelo", "radiacion", "viento"];
   const sensorEntries = useMemo(
-    () => (sensores ? Object.entries(sensores) : []),
+    () => sensores
+      ? Object.entries(sensores).filter(([k]) => SENSOR_KEYS_CONOCIDAS.includes(k))
+      : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [sensores]
   );
 
@@ -898,28 +951,40 @@ export default function Dashboard() {
             {sensores ? (
               <div className="space-y-3">
                 {[
-                  { label: "Temp", Icon: WiThermometer, value: sensores.temperatura, unit: "°C", max: 50, bar: "bg-orange-400" },
-                  { label: "Humedad", Icon: WiRaindrop, value: sensores.humedad, unit: "%", max: 100, bar: "bg-blue-400" },
-                  { label: "UV", Icon: WiDaySunny, value: sensores.radiacion, unit: "W", max: 1200, bar: "bg-yellow-400" },
-                  { label: "Viento", Icon: WiStrongWind, value: sensores.viento, unit: "m/s", max: 20, bar: "bg-teal-400" },
-                ].map(({ label, Icon, value, unit, max, bar }) => (
+                  { label: "Temp Amb", Icon: WiThermometer, value: sensores.temperatura, unit: "°C", max: 50, bar: "bg-orange-400", sensorNombre: "SHT31" },
+                  { label: "Hum Amb", Icon: WiHumidity, value: sensores.humedadAmbiente, unit: "%", max: 100, bar: "bg-sky-400", sensorNombre: "SHT31" },
+                  { label: "Temp Suelo", Icon: WiThermometer, value: sensores.temperaturasuelo, unit: "°C", max: 50, bar: "bg-amber-400", sensorNombre: "SHT10" },
+                  { label: "Hum Suelo", Icon: WiRaindrop, value: sensores.humedad, unit: "%", max: 100, bar: "bg-blue-400", sensorNombre: "SHT10" },
+                ].map(({ label, Icon, value, unit, max, bar, sensorNombre }) => {
+                  const offline = value === null || value === undefined;
+                  return (
                   <div key={label}>
                     <div className="flex items-center justify-between text-sm mb-1">
                       <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                         <Icon className="text-base" /> {label}
+                        <span className="text-[9px] text-gray-400 dark:text-gray-600 ml-0.5">({sensorNombre})</span>
                       </span>
-                      <span className="font-bold text-gray-800 dark:text-gray-100">
-                        {value}<span className="text-[10px] font-normal text-gray-400 ml-0.5">{unit}</span>
-                      </span>
+                      {offline ? (
+                        <span className="flex items-center gap-1 text-[10px] font-bold text-red-400">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
+                          Sin conexión
+                        </span>
+                      ) : (
+                        <span className="font-bold text-gray-800 dark:text-gray-100">
+                          {typeof value === "number" ? value.toFixed(1) : value}
+                          <span className="text-[10px] font-normal text-gray-400 ml-0.5">{unit}</span>
+                        </span>
+                      )}
                     </div>
                     <div className="h-1 bg-gray-100 dark:bg-slate-700/60 rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${bar} rounded-full transition-all duration-1000`}
-                        style={{ width: `${Math.min(100, Math.max(0, (value / max) * 100))}%` }}
+                        className={`h-full ${offline ? "bg-red-300" : bar} rounded-full transition-all duration-1000`}
+                        style={{ width: offline ? "100%" : `${Math.min(100, Math.max(0, (value / max) * 100))}%` }}
                       />
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {clima && (
                   <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200/30 dark:border-gray-700/30">
                     <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
