@@ -9,16 +9,17 @@ export default function EstadoModulo({ moduloId }) {
   const online = isModuleOnline(moduloId ? modulos[moduloId] : null);
 
   return (
-    <div className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full ${
-      online
-        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
-        : "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400"
-    }`}>
-      {online
-        ? <FiWifi size={10} className="animate-pulse" />
-        : <FiWifiOff size={10} />
-      }
-      OASYS Módulo {online ? "Online" : "Offline"}
+    <div
+      role="status"
+      aria-live="polite"
+      className={`flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full ${
+        online
+          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400"
+          : "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-400"
+      }`}
+    >
+      {online ? <FiWifi size={12} className="animate-breathe" /> : <FiWifiOff size={12} />}
+      <span className="whitespace-nowrap">{online ? 'Módulo: Online' : 'Módulo: Offline'}</span>
     </div>
   );
 }

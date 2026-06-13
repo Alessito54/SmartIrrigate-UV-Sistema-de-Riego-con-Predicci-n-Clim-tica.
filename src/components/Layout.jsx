@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiHome, FiSettings, FiLogOut, FiChevronDown, FiLink, FiLayers, FiChevronRight } from "react-icons/fi";
+import { FiHome, FiSettings, FiLogOut, FiChevronDown, FiLink, FiLayers, FiChevronRight, FiToggleRight } from "react-icons/fi";
 import { PiPlantLight } from "react-icons/pi";
 import { LuClock } from "react-icons/lu";
 import { useAuth } from "../context/AuthContext";
@@ -9,6 +9,7 @@ import { PROJECT_LOGO } from "../config";
 
 const menu = [
   { path: "/dashboard", label: "Inicio", icon: FiHome },
+  { path: "/control", label: "Control", icon: FiToggleRight },
   { path: "/cultivos", label: "Cultivos", icon: PiPlantLight },
   { path: "/historial", label: "Historial", icon: LuClock },
   { path: "/invernaderos", label: "Invernaderos", icon: FiLayers },
@@ -116,7 +117,7 @@ export default function Layout({ children }) {
               <img src={PROJECT_LOGO} alt="Logo" className="relative w-8 h-8 drop-shadow-lg" />
             </div>
             <div>
-              <p className="font-extrabold text-sm text-gray-900 dark:text-gray-50 leading-none">SmartIrrigate</p>
+              <p className="font-extrabold text-sm text-gray-900 dark:text-gray-50 leading-none">OASYS</p>
               <p className="text-[10px] text-gray-400 leading-none mt-0.5">· Sistema de Riego</p>
             </div>
           </div>
@@ -186,7 +187,9 @@ export default function Layout({ children }) {
             <GreenhouseSelector />
           </div>
           <div className="flex-1 px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-            {children}
+            <div className="max-w-7xl w-full mx-auto">
+              {children}
+            </div>
           </div>
         </main>
 

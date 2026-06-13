@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Palette variables for consistent theme usage */
+:root {
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --muted: #6b7280;
+  --accent: #16a34a; /* emerald-ish */
+  --glass-bg: rgba(255,255,255,0.55);
+}
+
+.dark {
+  --bg: #0f1724;
+  --card: #0b1220;
+  --muted: #9ca3af;
+  --accent: #34d399;
+  --glass-bg: rgba(15,23,42,0.6);
+}
+
 /* ─── Reset & base ──────────────────────────────────── */
 *,
 *::before,

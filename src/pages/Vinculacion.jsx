@@ -15,6 +15,7 @@ import {
     requestDeviceStatusUsb,
     requestChangeWifiUsb,
     requestForgetWifiUsb,
+    sendUsbCommand,
     listenForStatusUsb,
     disconnectUsb,
     isConnected as usbIsConnected,
@@ -609,6 +610,71 @@ export default function Vinculacion() {
                                     serialLogs.map((line, idx) => <p key={`${idx}-${line.slice(0, 24)}`}>{line}</p>)
                                 )}
                             </div>
+                            {/* ── Input interactivo para enviar comandos al ESP32 ── */}
+                            <form
+                                onSubmit={async (e) => {
+                                    e.preventDefault();
+                                    const input = e.target.elements.serialInput;
+                                    const text = input.value.trim();
+                                    if (!text) return;
+                                    try {
+                                        // Si parece JSON, enviarlo tal cual; si no, envolverlo como comando
+                                        let payload;
+                                        if (text.startsWith("{")) {
+                                            payload = text;
+                                        } else {
+                                            payload = JSON.stringify({ command: text });
+                                        }
+                                        const { sendUsbCommand: sendRaw } = await import("../services/usbService");
+                                        // Escribir directamente al puerto
+                                        if (!usbIsConnected()) {
+                                            setGlobalStatus({ type: "error", msg: "No hay dispositivo USB conectado." });
+                                            return;
+                                        }
+                                        // Usar la función de escritura del servicio
+                                        const usbMod = await import("../services/usbService");
+                                        // Acceder a la función de escritura interna no es posible,
+                                        // así que usamos sendUsbCommand con el texto como command
+                                        if (text.startsWith("{")) {
+                                            // JSON directo — enviar como WiFi config o comando
+                                            try {
+                                                const parsed = JSON.parse(text);
+                                                if (parsed.ssid) {
+                                                    await sendWiFiConfigUsb(parsed.ssid, parsed.password || "", parsed.invernaderoId || "", parsed.userId || "");
+                                                } else if (parsed.command) {
+                                                    await sendUsbCommand(parsed.command, parsed);
+                                                } else {
+                                                    await sendUsbCommand("raw", parsed);
+                                                }
+                                            } catch {
+                                                await sendUsbCommand(text);
+                                            }
+                                        } else {
+                                            await sendUsbCommand(text);
+                                        }
+                                        setSerialLogs((prev) => [...prev, `[TX] ${text}`].slice(-250));
+                                        input.value = "";
+                                    } catch (err) {
+                                        setGlobalStatus({ type: "error", msg: `Error enviando: ${err.message}` });
+                                    }
+                                }}
+                                className="flex border-t border-gray-200 dark:border-slate-700"
+                            >
+                                <span className="flex items-center px-2 bg-gray-100 dark:bg-slate-900/70 text-emerald-400 font-mono text-xs select-none">$</span>
+                                <input
+                                    name="serialInput"
+                                    type="text"
+                                    placeholder='Escribir comando... (ej: status, scan, {"ssid":"MiRed","password":"1234"})'
+                                    autoComplete="off"
+                                    className="flex-1 px-3 py-2 bg-black/80 text-emerald-300 font-mono text-[11px] outline-none placeholder:text-emerald-600/40"
+                                />
+                                <button
+                                    type="submit"
+                                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"
+                                >
+                                    Enviar
+                                </button>
+                            </form>
                         </div>
                     </div>
                 )}
