@@ -1,0 +1,64 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "oasys",
+      "intents": [
+        {
+          "name": "StartIrrigationIntent",
+          "slots": [
+            {
+              "name": "greenhouseName",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "sectionName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "inicie riego en {greenhouseName} en la sección {sectionName}",
+            "inicia riego en {greenhouseName} en la sección {sectionName}",
+            "iniciar riego en {greenhouseName} en la sección {sectionName}",
+            "prende el riego en {greenhouseName} en la sección {sectionName}",
+            "enciende el riego en {greenhouseName} en la sección {sectionName}",
+            "activa el riego en {greenhouseName} en la sección {sectionName}"
+          ]
+        },
+        {
+          "name": "StopIrrigationIntent",
+          "slots": [
+            {
+              "name": "greenhouseName",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "sectionName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "apague riego en {greenhouseName} en la sección {sectionName}",
+            "apaga riego en {greenhouseName} en la sección {sectionName}",
+            "apagar riego en {greenhouseName} en la sección {sectionName}",
+            "apaga el riego en {greenhouseName} en la sección {sectionName}",
+            "detén el riego en {greenhouseName} en la sección {sectionName}",
+            "desactiva el riego en {greenhouseName} en la sección {sectionName}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "interactionModel": {
+    "languageModel": {
+      "invocationName": "oasys",
+      "intents": [
+        {
+          "name": "StartIrrigationIntent",
+          "slots": [
+            {
+              "name": "greenhouseName",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "sectionName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "start irrigation in {greenhouseName} in section {sectionName}",
+            "begin irrigation in {greenhouseName} in section {sectionName}",
+            "turn on irrigation in {greenhouseName} in section {sectionName}",
+            "activate irrigation in {greenhouseName} in section {sectionName}",
+            "start watering in {greenhouseName} in section {sectionName}",
+            "turn on watering in {greenhouseName} in section {sectionName}"
+          ]
+        },
+        {
+          "name": "StopIrrigationIntent",
+          "slots": [
+            {
+              "name": "greenhouseName",
+              "type": "AMAZON.SearchQuery"
+            },
+            {
+              "name": "sectionName",
+              "type": "AMAZON.SearchQuery"
+            }
+          ],
+          "samples": [
+            "stop irrigation in {greenhouseName} in section {sectionName}",
+            "turn off irrigation in {greenhouseName} in section {sectionName}",
+            "deactivate irrigation in {greenhouseName} in section {sectionName}",
+            "end irrigation in {greenhouseName} in section {sectionName}",
+            "stop watering in {greenhouseName} in section {sectionName}",
+            "turn off watering in {greenhouseName} in section {sectionName}"
+          ]
+        },
+        {
+          "name": "AMAZON.CancelIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.HelpIntent",
+          "samples": []
+        },
+        {
+          "name": "AMAZON.StopIntent",
+          "samples": []
+        }
+      ],
+      "types": []
+    }
+  }
+}
