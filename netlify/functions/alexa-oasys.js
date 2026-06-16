@@ -174,7 +174,7 @@ function parseTextCommand(text) {
   };
 }
 
-function parseCommand(body) {
+   parseCommand(body) {
   if (isAlexaRequest(body)) {
     const request = body.request;
     if (request?.type === "LaunchRequest") {
@@ -185,6 +185,22 @@ function parseCommand(body) {
     }
 
     const intent = request.intent || {};
+
+    const commandText = getSlot(intent, [
+  "command",
+  "Command",
+  "comando",
+  "Comando",
+]);
+
+if (commandText) {
+  return {
+    alexa: true,
+    ...parseTextCommand(commandText),
+    locale: request.locale || "es-MX",
+  };
+}
+
     const greenhouseName = getSlot(intent, [
       "greenhouseName",
       "GreenhouseName",
