@@ -2,10 +2,39 @@
 #include "config.h"
 #include <WiFi.h>
 #include <Preferences.h>
+#include <esp_wifi.h>
+#include <esp_system.h>
 
 // ── Estado interno ──────────────────────────────────────────
 static Preferences _prefs;
 static String _currentSSID = "";
+
+static String jsonEscape(const String& value) {
+    String escaped = "";
+    escaped.reserve(value.length() + 8);
+
+    for (size_t i = 0; i < value.length(); i++) {
+        char c = value.charAt(i);
+        switch (c) {
+            case '\\': escaped += "\\\\"; break;
+            case '"':  escaped += "\\\""; break;
+            case '\b': escaped += "\\b"; break;
+            case '\f': escaped += "\\f"; break;
+            case '\n': escaped += "\\n"; break;
+            case '\r': escaped += "\\r"; break;
+            case '\t': escaped += "\\t"; break;
+            default:
+                if ((uint8_t)c < 0x20) {
+                    escaped += " ";
+                } else {
+                    escaped += c;
+                }
+                break;
+        }
+    }
+
+    return escaped;
+}
 
 // ── Chip ID ─────────────────────────────────────────────────
 String getChipId() {
@@ -17,7 +46,9 @@ String getChipId() {
 
 // ── Inicialización ──────────────────────────────────────────
 bool wifiInit() {
+    WiFi.persistent(false);
     WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
     WiFi.setAutoReconnect(true);
 
     _prefs.begin(PREF_NAMESPACE, true);  // read-only
@@ -74,8 +105,12 @@ String wifiGetIP() {
 bool wifiConnect(const String& ssid, const String& password) {
     Serial.println("{\"status\":\"connecting\",\"ssid\":\"" + ssid + "\"}");
 
-    WiFi.disconnect(true);
+    WiFi.disconnect(false);
     delay(200);
+    WiFi.persistent(false);
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
+    WiFi.setAutoReconnect(true);
     WiFi.begin(ssid.c_str(), password.c_str());
 
     unsigned long startTime = millis();
@@ -101,18 +136,45 @@ bool wifiConnect(const String& ssid, const String& password) {
     return true;
 }
 
-// ── Escaneo de redes ────────────────────────────────────────
+// ── Escaneo de redes ──────────────────────────────────────
 String wifiScan() {
-    int n = WiFi.scanNetworks();
-    String json = "{\"scan\":[";
+    WiFi.mode(WIFI_STA);
+    WiFi.setSleep(false);
+    WiFi.setTxPower(WIFI_POWER_2dBm);
+    esp_wifi_set_ps(WIFI_PS_NONE);
+    WiFi.scanDelete();
+    delay(250);
 
-    for (int i = 0; i < n; i++) {
-        if (i > 0) json += ",";
-        json += "{\"ssid\":\"" + WiFi.SSID(i) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+    Serial.println("{\"scanStatus\":\"start\"}");
+    Serial.println("{\"scanStatus\":\"diag\",\"resetReason\":" + String((int)esp_reset_reason()) + ",\"heap\":" + String(ESP.getFreeHeap()) + "}");
+    Serial.flush();
+
+    int n = WiFi.scanNetworks(false, false, false, 250);
+    if (n <= 0) {
+        Serial.println("{\"scanStatus\":\"retry_active\",\"code\":" + String(n) + "}");
+        Serial.flush();
+        WiFi.scanDelete();
+        delay(250);
+        n = WiFi.scanNetworks(false, true, false, 350);
     }
 
-    json += "]}";
+    Serial.println("{\"scanStatus\":\"done\",\"count\":" + String(n > 0 ? n : 0) + ",\"code\":" + String(n) + "}");
+    Serial.flush();
+
+    String json = "{\"scan\":[";
+    if (n > 0) {
+        for (int i = 0; i < n; i++) {
+            if (i > 0) json += ",";
+            json += "{\"ssid\":\"" + jsonEscape(WiFi.SSID(i)) + "\",\"rssi\":" + String(WiFi.RSSI(i)) + "}";
+        }
+    }
+    json += "],\"count\":" + String(n > 0 ? n : 0);
+    if (n < 0) {
+        json += ",\"error\":\"scan_failed\",\"code\":" + String(n);
+    }
+    json += "}";
     WiFi.scanDelete();
+
     return json;
 }
 

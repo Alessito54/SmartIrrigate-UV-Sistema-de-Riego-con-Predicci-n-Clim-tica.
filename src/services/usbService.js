@@ -15,8 +15,19 @@ let _keepReading = false;
 let _readPromise = null;
 let _onDisconnectCb = null;  // callback para avisar que se perdió el dispositivo
 let _lastPortInfo = null;
+let _statusCallback = null;
+let _readLoopActive = false;
+let _recovering = false;
+let _recoverWindowStarted = 0;
+let _recoverCount = 0;
+let _lastStatus = null;
 
 const USB_BAUD_RATE = 115200;
+const ESP32_BOOT_DELAY_MS = 1800;
+const USB_RECONNECT_GRACE_MS = 6000;
+const USB_WRITE_TIMEOUT_MS = 9000;
+const USB_RECOVERY_WINDOW_MS = 15000;
+const USB_MAX_RECOVERIES_PER_WINDOW = 2;
 const SERIAL_FILTERS = [
     { usbVendorId: 0x303A }, // Espressif
     { usbVendorId: 0x10C4 }, // Silicon Labs CP210x
@@ -58,6 +69,10 @@ export function getDeviceName() {
     return _port ? "OASYS (USB)" : null;
 }
 
+export function getLastStatus() {
+    return _lastStatus;
+}
+
 // ============================================================
 // CONEXIÓN
 // ============================================================
@@ -67,10 +82,19 @@ export async function connectToOASYSUsb(onDisconnect = null) {
         throw new Error(getUsbUnavailableReason() ?? "USB no disponible.");
     }
 
+    _onDisconnectCb = onDisconnect;
+    _resetRecoveryBudget();
+
+    if (_port) {
+        if (!_port.readable && !_port.writable) {
+            await _ensurePortReadable();
+        }
+        console.log("[USB] Reutilizando puerto serial abierto");
+        return getDeviceName();
+    }
+
     // Limpiar estado anterior si quedó sucio
     await _cleanupPort();
-
-    _onDisconnectCb = onDisconnect;
 
     // Solicita puerto al usuario (con filtros para evitar dispositivos BT bloqueados)
     _port = await navigator.serial.requestPort({ filters: SERIAL_FILTERS });
@@ -81,6 +105,7 @@ export async function connectToOASYSUsb(onDisconnect = null) {
 
     // Abre el puerto a 115200 baudios
     await _port.open({ baudRate: USB_BAUD_RATE });
+    await _settlePortAfterOpen();
 
     console.log("[USB] Conectado al puerto serial");
     return "OASYS (USB)";
@@ -90,10 +115,8 @@ export async function connectToOASYSUsb(onDisconnect = null) {
 // ENVIAR CONFIGURACIÓN
 // ============================================================
 
-export async function sendWiFiConfigUsb(ssid, password, invernaderoId, userId) {
-    if (!_port?.writable) throw new Error("No hay dispositivo USB conectado o puerto no escribible.");
-
-    const payload = JSON.stringify({ ssid, password, invernaderoId, userId }) + "\n";
+export async function sendWiFiConfigUsb(ssid, password, invernaderoId, userId, seccionId = "") {
+    const payload = JSON.stringify({ ssid, password, invernaderoId, seccionId, userId }) + "\n";
     await _writeToPort(payload);
     console.log(`[USB] Config enviada: ${payload}`);
 
@@ -102,24 +125,17 @@ export async function sendWiFiConfigUsb(ssid, password, invernaderoId, userId) {
 }
 
 export async function requestWiFiScanUsb() {
-    if (!_port?.writable) throw new Error("No hay dispositivo USB conectado o puerto no escribible.");
-
-    const payload = JSON.stringify({ command: "scan" }) + "\n";
-    await _writeToPort(payload);
+    await _writeToPort(JSON.stringify({ command: "scan" }) + "\n");
     console.log("[USB] Escaneo de redes WiFi solicitado");
 }
 
 export async function requestDeviceStatusUsb() {
-    if (!_port?.writable) throw new Error("No hay dispositivo USB conectado o puerto no escribible.");
-
     const payload = JSON.stringify({ command: "status" }) + "\n";
     await _writeToPort(payload);
     console.log("[USB] Estado del dispositivo solicitado");
 }
 
 export async function sendUsbCommand(command, extra = {}) {
-    if (!_port?.writable) throw new Error("No hay dispositivo USB conectado o puerto no escribible.");
-
     const payload = JSON.stringify({ command, ...extra }) + "\n";
     await _writeToPort(payload);
     console.log(`[USB] Comando enviado: ${command}`);
@@ -134,12 +150,38 @@ export async function requestForgetWifiUsb() {
 }
 
 async function _writeToPort(text) {
-    const textEncoder = new TextEncoderStream();
-    // No guardamos writableStreamClosed — solo necesitamos escribir
-    textEncoder.readable.pipeTo(_port.writable).catch(() => {});
-    const writer = textEncoder.writable.getWriter();
-    await writer.write(text);
-    writer.releaseLock();
+    if (!_keepReading) {
+        throw new Error("El puerto USB se desconectó. Vuelve a conectar el módulo USB.");
+    }
+
+    const bytes = new TextEncoder().encode(text);
+    let port = await _waitForWritablePort();
+
+    try {
+        const writer = port.writable.getWriter();
+        try {
+            await writer.write(bytes);
+        } finally {
+            writer.releaseLock();
+        }
+        _kickReadLoop();
+    } catch (err) {
+        const lost =
+            err?.message?.includes("device has been lost") ||
+            err?.name === "NetworkError";
+
+        if (!lost) throw err;
+
+        _port = null;
+        port = await _waitForWritablePort();
+        const writer = port.writable.getWriter();
+        try {
+            await writer.write(bytes);
+        } finally {
+            writer.releaseLock();
+        }
+        _kickReadLoop();
+    }
 }
 
 // ============================================================
@@ -149,102 +191,106 @@ async function _writeToPort(text) {
 export async function listenForStatusUsb(callback) {
     if (!_port) throw new Error("No hay dispositivo USB conectado.");
 
+    _statusCallback = callback;
     _keepReading = true;
-    _readPromise = _readLoop(callback);
+    _kickReadLoop();
 }
 
 async function _readLoop(callback) {
+    if (_readLoopActive) return;
+    _readLoopActive = true;
+
     // Cada iteración del while recrea el stream para manejar reinicios del ESP32
-    while (_keepReading) {
-        if (!_port) {
-            const recovered = await _tryAutoReconnect();
-            if (!recovered) {
-                await new Promise((r) => setTimeout(r, 800));
-                continue;
-            }
-        }
-
-        if (!_port?.readable) {
-            const opened = await _ensurePortOpen();
-            if (!opened) {
-                const recovered = await _tryAutoReconnect();
+    try {
+        while (_keepReading) {
+            if (!_port) {
+                const recovered = await _recoverAfterDeviceLoss();
                 if (!recovered) {
-                    await new Promise((r) => setTimeout(r, 800));
-                    continue;
+                    _stopReadingAndNotify();
+                    break;
                 }
             }
-        }
 
-        if (!_port?.readable) {
-            await new Promise((r) => setTimeout(r, 500));
-            continue;
-        }
-
-        const textDecoder = new TextDecoderStream();
-
-        // pipeTo puede lanzar si el dispositivo se desconecta — lo capturamos
-        const pipeClosed = _port.readable
-            .pipeTo(textDecoder.writable)
-            .catch((err) => {
-                // "The device has been lost" llega aquí — es esperado si el ESP32 reinicia
-                if (_keepReading) {
-                    console.warn("[USB] Pipe cerrado (posible reinicio del ESP32):", err.message);
-                }
-            });
-
-        _reader = textDecoder.readable.getReader();
-        let buffer = "";
-
-        try {
-            while (_keepReading) {
-                const { value, done } = await _reader.read();
-                if (done) break;
-
-                buffer += value;
-
-                // Procesar líneas completas
-                const lines = buffer.split("\n");
-                buffer = lines.pop(); // parte incompleta queda en el buffer
-
-                for (let line of lines) {
-                    line = line.trim();
-                    if (!line) continue;
-
-                    if (line.startsWith("{") && line.endsWith("}")) {
-                        try {
-                            const parsed = JSON.parse(line);
-                            console.log("[USB] Estado recibido:", parsed);
-                            callback(parsed);
-                        } catch {
-                            callback({ type: "raw", line, ts: Date.now() });
-                        }
-                    } else {
-                        callback({ type: "raw", line, ts: Date.now() });
+            if (!_port?.readable) {
+                const opened = await _ensurePortReadable();
+                if (!opened) {
+                    const recovered = await _recoverAfterDeviceLoss();
+                    if (!recovered) {
+                        _stopReadingAndNotify();
+                        break;
                     }
                 }
             }
-        } catch (err) {
-            const isDeviceLost =
-                err?.message?.includes("device has been lost") ||
-                err?.name === "NetworkError";
 
-            if (isDeviceLost && _keepReading) {
-                console.warn("[USB] Dispositivo perdido (reinicio del ESP32). Esperando reconexión...");
-                await new Promise((r) => setTimeout(r, 1200));
-                await _ensurePortOpen().catch(() => {});
-                await _tryAutoReconnect().catch(() => {});
-            } else if (_keepReading) {
-                console.error("[USB] Error leyendo datos seriales:", err);
+            if (!_port?.readable) {
+                await new Promise((r) => setTimeout(r, 500));
+                continue;
             }
-        } finally {
-            try {
-                _reader?.releaseLock();
-            } catch { /* ya liberado */ }
-            _reader = null;
 
-            // Esperar que el pipe anterior termine antes de re-crear
-            await pipeClosed.catch(() => {});
+            const decoder = new TextDecoder();
+            _reader = _port.readable.getReader();
+            let buffer = "";
+
+            try {
+                while (_keepReading) {
+                    const { value, done } = await _reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Procesar líneas completas
+                    const lines = buffer.split("\n");
+                    buffer = lines.pop(); // parte incompleta queda en el buffer
+
+                    for (let line of lines) {
+                        line = line.trim();
+                        if (!line) continue;
+                        _resetRecoveryBudget();
+
+                        if (line.startsWith("{") && line.endsWith("}")) {
+                            try {
+                                const parsed = JSON.parse(line);
+                                _lastStatus = parsed;
+                                console.log("[USB] Estado recibido:", parsed);
+                                callback(parsed);
+                            } catch {
+                                callback({ type: "raw", line, ts: Date.now() });
+                            }
+                        } else {
+                            callback({ type: "raw", line, ts: Date.now() });
+                        }
+                    }
+                }
+            } catch (err) {
+                const isDeviceLost =
+                    err?.message?.includes("device has been lost") ||
+                    err?.name === "NetworkError";
+
+                if (isDeviceLost && _keepReading) {
+                    if (!_canAttemptRecovery()) {
+                        console.warn("[USB] El ESP32 está reiniciando el puerto repetidamente. Deteniendo lectura.");
+                        callback({ type: "raw", line: "[USB] El ESP32 reinició demasiadas veces. Reconecta manualmente el módulo.", ts: Date.now() });
+                        _stopReadingAndNotify();
+                        continue;
+                    }
+                    callback({ type: "raw", line: "[USB] ESP32 reinició el puerto, esperando reconexión...", ts: Date.now() });
+                    const recovered = await _recoverAfterDeviceLoss();
+                    if (!recovered && _keepReading) {
+                        console.warn("[USB] No se pudo recuperar el puerto USB.");
+                        _stopReadingAndNotify();
+                    }
+                } else if (_keepReading) {
+                    console.error("[USB] Error leyendo datos seriales:", err);
+                }
+            } finally {
+                try {
+                    _reader?.releaseLock();
+                } catch { /* ya liberado */ }
+                _reader = null;
+            }
         }
+    } finally {
+        _readLoopActive = false;
     }
 
     console.log("[USB] Loop de lectura terminado.");
@@ -255,18 +301,16 @@ async function _readLoop(callback) {
 // ============================================================
 
 function _handlePhysicalDisconnect() {
-    console.warn("[USB] Dispositivo USB desconectado físicamente.");
-    // No cerramos flujo de inmediato: damos oportunidad de autoreconexión
-    // (reinicio del ESP32 o reconexión rápida del puerto).
-    _port = null;
+    console.warn("[USB] Dispositivo USB desconectado o reiniciado.");
+    _dropCurrentPort().catch(() => {});
 
     setTimeout(async () => {
         if (!_keepReading) return;
-        const recovered = await _tryAutoReconnect();
-        if (!recovered && typeof _onDisconnectCb === "function") {
-            _onDisconnectCb();
-        }
-    }, 1200);
+        const recovered = await _recoverAfterDeviceLoss();
+        if (recovered) return;
+
+        _stopReadingAndNotify();
+    }, 700);
 }
 
 // ============================================================
@@ -308,20 +352,38 @@ async function _cleanupPort() {
     _reader = null;
     _readPromise = null;
     _onDisconnectCb = null;
+    _statusCallback = null;
+    _readLoopActive = false;
+    _recovering = false;
+    _lastStatus = null;
+    _resetRecoveryBudget();
 }
 
-async function _ensurePortOpen() {
+async function _ensurePortReadable() {
     if (!_port) return false;
     if (_port.readable) return true;
     try {
         await _port.open({ baudRate: USB_BAUD_RATE });
+        await _settlePortAfterOpen();
         return true;
     } catch {
         return false;
     }
 }
 
-async function _tryAutoReconnect() {
+async function _ensurePortWritable() {
+    if (!_port) return false;
+    if (_port.writable) return true;
+    try {
+        await _port.open({ baudRate: USB_BAUD_RATE });
+        await _settlePortAfterOpen();
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+async function _tryAutoReconnect(quiet = false) {
     if (!isUsbSupported()) return false;
     try {
         const ports = await navigator.serial.getPorts();
@@ -336,7 +398,10 @@ async function _tryAutoReconnect() {
             );
         });
 
-        const candidate = matched || ports[0];
+        const candidate = matched || ports.find((p) => {
+            const info = p.getInfo?.() ?? {};
+            return SERIAL_FILTERS.some((f) => f.usbVendorId === info.usbVendorId);
+        }) || ports[0];
         if (!candidate) return false;
 
         _port = candidate;
@@ -346,11 +411,114 @@ async function _tryAutoReconnect() {
 
         if (!_port.readable) {
             await _port.open({ baudRate: USB_BAUD_RATE });
+            await _settlePortAfterOpen();
         }
 
-        console.log("[USB] Reconexión automática completada.");
         return true;
-    } catch {
+    } catch (err) {
+        if (!quiet) {
+            console.warn("[USB] No se pudo reconectar automáticamente:", err?.message || err);
+        }
         return false;
     }
+}
+
+async function _waitForWritablePort(timeoutMs = USB_WRITE_TIMEOUT_MS) {
+    const started = Date.now();
+
+    while (Date.now() - started < timeoutMs) {
+        if (!_port) {
+            await _tryAutoReconnect(true).catch(() => false);
+        } else if (!_port.writable) {
+            await _ensurePortWritable().catch(() => false);
+        }
+
+        if (_port?.writable) return _port;
+        await _delay(300);
+    }
+
+    throw new Error("No hay dispositivo USB conectado o puerto no escribible.");
+}
+
+async function _dropCurrentPort() {
+    const port = _port;
+    _port = null;
+
+    try {
+        await _reader?.cancel().catch(() => {});
+    } catch { /* ignorar */ }
+
+    try {
+        if (port?.readable || port?.writable) {
+            await port.close().catch(() => {});
+        }
+    } catch { /* ignorar */ }
+}
+
+function _stopReadingAndNotify() {
+    if (!_keepReading) return;
+    _keepReading = false;
+    if (typeof _onDisconnectCb === "function") {
+        _onDisconnectCb();
+    }
+}
+
+async function _settlePortAfterOpen() {
+    try {
+        await _port?.setSignals?.({ dataTerminalReady: false, requestToSend: false });
+    } catch { /* setSignals no está disponible en todos los adaptadores */ }
+    await _delay(ESP32_BOOT_DELAY_MS);
+}
+
+function _canAttemptRecovery() {
+    const now = Date.now();
+    if (!(_recoverWindowStarted > 0) || now - _recoverWindowStarted > USB_RECOVERY_WINDOW_MS) {
+        _recoverWindowStarted = now;
+        _recoverCount = 0;
+    }
+
+    _recoverCount += 1;
+    return _recoverCount <= USB_MAX_RECOVERIES_PER_WINDOW;
+}
+
+function _resetRecoveryBudget() {
+    _recoverWindowStarted = 0;
+    _recoverCount = 0;
+}
+
+async function _recoverAfterDeviceLoss(timeoutMs = USB_RECONNECT_GRACE_MS) {
+    if (_recovering) {
+        const started = Date.now();
+        while (_recovering && Date.now() - started < timeoutMs) {
+            await _delay(150);
+        }
+        return Boolean(_port?.readable || _port?.writable);
+    }
+    _recovering = true;
+
+    try {
+        await _dropCurrentPort();
+        const started = Date.now();
+
+        while (_keepReading && Date.now() - started < timeoutMs) {
+            const recovered = await _tryAutoReconnect(true).catch(() => false);
+            if (recovered) {
+                return true;
+            }
+            await _delay(350);
+        }
+
+        return false;
+    } finally {
+        _recovering = false;
+    }
+}
+
+function _kickReadLoop() {
+    if (!_keepReading || !_statusCallback || _readLoopActive) return;
+    _readPromise = _readLoop(_statusCallback);
+}
+
+function _delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }

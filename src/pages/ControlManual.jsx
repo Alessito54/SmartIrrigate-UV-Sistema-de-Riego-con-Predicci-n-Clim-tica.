@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, memo } from "react";
-import { ref, onValue, set } from "firebase/database";
+import { ref, onValue, set, get } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { WiRaindrop } from "react-icons/wi";
@@ -223,23 +223,36 @@ const ControlCard = memo(function ControlCard({ type, value, onToggle, index, di
 
 // ─── Componente principal ─────────────────────────────────────
 export default function ControlManual() {
-    const { sectionPath } = useAuth();
+    const { invId, secId, sectionPath, currentInvernadero, currentSection, invernaderos, selectInvernadero } = useAuth();
     const [automatico, setAutomatico] = useState(null);
     const [riego, setRiego] = useState(null);
     const [malla, setMalla] = useState(null);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState({ open: false, type: null, value: null });
+    const [controlError, setControlError] = useState("");
+    const [lastWriteInfo, setLastWriteInfo] = useState(null);
 
     // Listeners en tiempo real
     useEffect(() => {
         if (!sectionPath) return;
         const unsubs = [
-            onValue(ref(db, `${sectionPath}/controlAutomatico/activo`), (s) => setAutomatico(s.val())),
-            onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val())),
-            onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val())),
+            onValue(ref(db, `${sectionPath}/controlAutomatico/activo`), (s) => setAutomatico(s.val() === true)),
+            onValue(ref(db, `${sectionPath}/control/riego`), (s) => {
+                const value = s.val() === true;
+                setRiego(value);
+                setLastWriteInfo((prev) => prev ? { ...prev, riegoActual: value } : prev);
+            }),
+            onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val() === true)),
         ];
         return () => unsubs.forEach((u) => u());
     }, [sectionPath]);
+
+    const verifyControlValue = useCallback(async (path, expectedValue, label) => {
+        const verify = await get(ref(db, path));
+        if (verify.val() !== expectedValue) {
+            throw new Error(`Firebase no conservó ${label} en ${path}. Esperado: ${String(expectedValue)}. Actual: ${String(verify.val())}`);
+        }
+    }, []);
 
     const pedirConfirmacion = useCallback((type, value) => {
         setModal({ open: true, type, value });
@@ -252,19 +265,50 @@ export default function ControlManual() {
     const confirmarAccion = useCallback(async () => {
         if (!sectionPath) return;
         setLoading(true);
+        setControlError("");
         try {
             if (modal.type === "automatico") {
                 await set(ref(db, `${sectionPath}/controlAutomatico/activo`), modal.value);
             } else if (modal.type === "riego") {
-                await set(ref(db, `${sectionPath}/control/riego`), modal.value);
+                const path = `${sectionPath}/control/riego`;
+                await set(ref(db, path), modal.value);
+                await verifyControlValue(path, modal.value, "riego");
+                setLastWriteInfo({
+                    path,
+                    esperado: modal.value,
+                    riegoActual: modal.value,
+                    checkedAt: new Date().toLocaleTimeString("es-MX"),
+                    status: "Escritura confirmada. Revisando si otro cliente la pisa...",
+                });
+                setTimeout(async () => {
+                    try {
+                        await verifyControlValue(path, modal.value, "riego después de unos segundos");
+                        setLastWriteInfo((prev) => prev?.path === path ? {
+                            ...prev,
+                            checkedAt: new Date().toLocaleTimeString("es-MX"),
+                            status: "Firebase mantuvo el valor. La web sí está escribiendo bien.",
+                        } : prev);
+                    } catch (err) {
+                        setControlError(`${err.message}. Esto indica que otro cliente lo regresó, normalmente el ESP32 con firmware viejo o una ruta/automatización activa.`);
+                        setLastWriteInfo((prev) => prev?.path === path ? {
+                            ...prev,
+                            checkedAt: new Date().toLocaleTimeString("es-MX"),
+                            status: "El valor fue pisado después de escribirlo.",
+                        } : prev);
+                    }
+                }, 4500);
             } else if (modal.type === "malla") {
-                await set(ref(db, `${sectionPath}/control/malla`), modal.value);
+                const path = `${sectionPath}/control/malla`;
+                await set(ref(db, path), modal.value);
+                await verifyControlValue(path, modal.value, "malla");
             }
+        } catch (err) {
+            setControlError(err.message || "No se pudo aplicar el cambio en Firebase.");
         } finally {
             setLoading(false);
             setModal({ open: false, type: null, value: null });
         }
-    }, [modal, sectionPath]);
+    }, [modal, sectionPath, verifyControlValue]);
 
     const modalConfig = modal.type ? controlItems[modal.type] : null;
     const modalMessage = modalConfig
@@ -272,6 +316,23 @@ export default function ControlManual() {
         : "";
 
     const manualDisabled = automatico === true;
+    const invEntries = Object.entries(invernaderos || {});
+
+    if (!sectionPath) {
+        return (
+            <div className="max-w-4xl mx-auto space-y-6 animate-fadeUp">
+                <header>
+                    <h1 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight flex items-center gap-3">
+                        <FiToggleRight size={32} className="text-emerald-500" />
+                        Control del sistema
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        Crea o selecciona un invernadero para controlar la bomba y la malla sombra.
+                    </p>
+                </header>
+            </div>
+        );
+    }
 
     return (
         <div className="max-w-4xl mx-auto space-y-6 animate-fadeUp">
@@ -292,10 +353,48 @@ export default function ControlManual() {
                     Control del sistema
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 max-w-lg leading-relaxed">
-                    Activa o desactiva el modo automático, la bomba de agua y la malla sombra.
+                    Activa o desactiva el modo automático, la bomba de agua y la malla sombra de este invernadero.
                     Cuando el modo automático está activo, los controles manuales se deshabilitan.
                 </p>
             </header>
+
+            <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+                <div>
+                    <p className="text-xs uppercase tracking-wider font-bold text-gray-400">Invernadero activo</p>
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">
+                        {currentInvernadero?.nombre || invId}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                        Sección: {currentSection?.nombre || secId}
+                    </p>
+                </div>
+                {invEntries.length > 1 && (
+                    <select
+                        value={invId || ""}
+                        onChange={(e) => selectInvernadero(e.target.value)}
+                        className="px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40"
+                    >
+                        {invEntries.map(([id, inv]) => (
+                            <option key={id} value={id}>{inv.nombre || id.slice(-8)}</option>
+                        ))}
+                    </select>
+                )}
+            </div>
+
+            {controlError && (
+                <div className="px-4 py-3 rounded-2xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-sm text-red-700 dark:text-red-300">
+                    {controlError}
+                </div>
+            )}
+
+            {lastWriteInfo && (
+                <div className="px-4 py-3 rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 text-xs text-sky-700 dark:text-sky-300 space-y-1">
+                    <p className="font-bold">Diagnóstico Firebase</p>
+                    <p><span className="font-semibold">Ruta:</span> <span className="font-mono">{lastWriteInfo.path}</span></p>
+                    <p><span className="font-semibold">Esperado:</span> {String(lastWriteInfo.esperado)} · <span className="font-semibold">Actual leído:</span> {String(lastWriteInfo.riegoActual)}</p>
+                    <p><span className="font-semibold">Estado:</span> {lastWriteInfo.status} · {lastWriteInfo.checkedAt}</p>
+                </div>
+            )}
 
             {/* Auto mode info banner */}
             {manualDisabled && (

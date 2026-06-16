@@ -2,6 +2,7 @@
 #include "config.h"
 #include "wifi_manager.h"
 #include "actuators.h"
+#include "sensors.h"
 
 #include <WiFi.h>
 #include <Firebase_ESP_Client.h>
@@ -18,6 +19,7 @@ static String _secId  = "";
 static String _chipId = "";
 
 static bool _ready = false;
+static bool _safeStateAppliedForBoot = false;
 
 static unsigned long _lastHeartbeat   = 0;
 static unsigned long _lastPoll        = 0;
@@ -28,20 +30,121 @@ static String _sectionPath() {
     return "invernaderos/" + _invId + "/secciones/" + _secId;
 }
 
+static String _invernaderoPath() {
+    return "invernaderos/" + _invId;
+}
+
 static String _moduloPath() {
     return "modulos/" + _chipId;
+}
+
+static bool _getBoolOr(const String& path, bool fallback) {
+    if (Firebase.RTDB.getBool(&_fbData, path)) {
+        return _fbData.boolData();
+    }
+    Serial.println("[FB] No pude leer bool " + path + ": " + _fbData.errorReason());
+    return fallback;
+}
+
+static float _getFloatOr(const String& path, float fallback) {
+    if (Firebase.RTDB.getFloat(&_fbData, path)) {
+        return _fbData.floatData();
+    }
+    if (Firebase.RTDB.getInt(&_fbData, path)) {
+        return _fbData.intData();
+    }
+    return fallback;
+}
+
+static void _applySafeControlState() {
+    if (_safeStateAppliedForBoot || _invId.length() == 0 || _secId.length() == 0) return;
+
+    setBomba(false);
+    setMalla(false);
+
+    _safeStateAppliedForBoot = true;
+    Serial.println("[FB] Estado seguro local aplicado: bomba/malla apagadas hasta leer Firebase");
+}
+
+static bool _resolveLinkedInvernadero() {
+    if (!firebaseIsReady()) return false;
+
+    String invLinkPath = _moduloPath() + "/invernaderoId";
+    String secLinkPath = _moduloPath() + "/seccionId";
+    Serial.println("[FB] Buscando vinculacion en: " + invLinkPath + " y " + secLinkPath);
+
+    bool invOk = Firebase.RTDB.getString(&_fbData, invLinkPath);
+    String linkedInvId = invOk ? _fbData.stringData() : "";
+    if (!invOk) {
+        Serial.println("[FB] No pude leer invernadero en " + invLinkPath + ": " + _fbData.errorReason());
+    }
+
+    bool secOk = Firebase.RTDB.getString(&_fbData, secLinkPath);
+    String linkedSecId = secOk ? _fbData.stringData() : "";
+    if (!secOk) {
+        Serial.println("[FB] No pude leer seccion en " + secLinkPath + ": " + _fbData.errorReason());
+    }
+
+    if (invOk && secOk) {
+        linkedInvId.trim();
+        linkedSecId.trim();
+
+        if (linkedInvId.length() > 0 && linkedInvId != "null"
+            && linkedSecId.length() > 0 && linkedSecId != "null") {
+            if (linkedInvId != _invId || linkedSecId != _secId) {
+                _invId = linkedInvId;
+                _secId = linkedSecId;
+                wifiSaveInvernaderoConfig(_invId, _secId, wifiGetSavedUserId());
+                Serial.println("[FB] Vinculación detectada: " + _sectionPath());
+            }
+            _applySafeControlState();
+            return true;
+        }
+
+        if (_invId.length() > 0 || _secId.length() > 0) {
+            _invId = "";
+            _secId = "";
+            _safeStateAppliedForBoot = false;
+            wifiSaveInvernaderoConfig(_invId, _secId, wifiGetSavedUserId());
+            Serial.println("[FB] Módulo sin sección vinculada.");
+        }
+    } else {
+        String savedInvId = wifiGetSavedInvId();
+        String savedSecId = wifiGetSavedSecId();
+        savedInvId.trim();
+        savedSecId.trim();
+
+        if (savedInvId.length() > 0 && savedInvId != "null"
+            && savedSecId.length() > 0 && savedSecId != "null") {
+            if (savedInvId != _invId || savedSecId != _secId) {
+                _invId = savedInvId;
+                _secId = savedSecId;
+                Serial.println("[FB] Usando sección guardada por configuración WiFi: " + _sectionPath());
+            }
+            _applySafeControlState();
+            return true;
+        }
+
+        return false;
+    }
+
+    return false;
 }
 
 // ── Inicialización ──────────────────────────────────────────
 bool firebaseInit(const String& invId, const String& secId) {
     _chipId = getChipId();
+    _safeStateAppliedForBoot = false;
 
-    // Usar IDs proporcionados, o los guardados, o los por defecto
-    _invId = invId.length() > 0 ? invId : wifiGetSavedInvId();
-    _secId = secId.length() > 0 ? secId : wifiGetSavedSecId();
+    // La fuente de verdad de la vinculación es Firebase:
+    // modulos/{chipId}/invernaderoId + modulos/{chipId}/seccionId.
+    // No usamos NVS como fuente primaria para evitar rutas viejas si se
+    // reasigna desde la web.
+    _invId = invId;
+    _secId = secId;
 
     if (_invId.length() == 0 || _secId.length() == 0) {
-        Serial.println("[FB] Sin invernadero/sección configurados. Esperando vinculación...");
+        Serial.println("[FB] Sin sección configurada. Esperando vinculación...");
         Serial.println("{\"status\":\"needs_link\",\"chipId\":\"" + _chipId + "\"}");
         // No retornamos false — Firebase se inicializa de todos modos
         // para poder recibir la vinculación más tarde
@@ -51,10 +154,11 @@ bool firebaseInit(const String& invId, const String& secId) {
     _fbConfig.api_key = FIREBASE_API_KEY;
     _fbConfig.database_url = FIREBASE_HOST;
 
-    // Autenticación anónima (sign-up anónimo)
-    // Para el ESP32 usamos acceso directo con las reglas de módulos
-    _fbAuth.user.email = "";
-    _fbAuth.user.password = "";
+    // El ESP32 usa rutas RTDB públicas/controladas por reglas:
+    // - lee modulos/{chipId}/invernaderoId + seccionId y control
+    // - escribe sensores/heartbeat
+    // No inicia sesión como usuario de la app web.
+    _fbConfig.signer.test_mode = true;
 
     // Token callback
     _fbConfig.token_status_callback = tokenStatusCallback;
@@ -73,8 +177,8 @@ bool firebaseInit(const String& invId, const String& secId) {
     Serial.println("[FB] ChipID: " + _chipId);
     if (_invId.length() > 0) {
         Serial.println("[FB] Invernadero: " + _invId);
-        Serial.println("[FB] Sección: " + _secId);
-        Serial.println("[FB] Ruta: " + _sectionPath());
+        if (_secId.length() > 0) Serial.println("[FB] Sección: " + _secId);
+        if (_secId.length() > 0) Serial.println("[FB] Ruta control: " + _sectionPath());
     }
 
     return true;
@@ -88,29 +192,46 @@ bool firebaseIsReady() {
 // ── Polling de control ──────────────────────────────────────
 void firebasePollControl() {
     if (!firebaseIsReady()) return;
-    if (_invId.length() == 0 || _secId.length() == 0) return;
 
     unsigned long now = millis();
     if (now - _lastPoll < FIREBASE_POLL_INTERVAL_MS) return;
     _lastPoll = now;
 
-    String basePath = _sectionPath() + "/control";
+    if (!_resolveLinkedInvernadero()) return;
 
-    // Leer riego
-    if (Firebase.RTDB.getBool(&_fbData, basePath + "/riego")) {
-        bool riego = _fbData.boolData();
+    String sectionPath = _sectionPath();
+    String controlPath = sectionPath + "/control";
+    String autoPath = sectionPath + "/controlAutomatico";
+    Serial.println("[FB] Leyendo control desde: " + controlPath);
+    Serial.println("[FB] Ruta riego: " + controlPath + "/riego");
+    bool automatico = _getBoolOr(autoPath + "/activo", false);
+
+    if (!automatico) {
+        // Modo manual: leer ordenes directas de la app.
+        bool riego = _getBoolOr(controlPath + "/riego", getBombaState());
+        bool malla = _getBoolOr(controlPath + "/malla", getMallaState());
+        Serial.println("[FB] Control manual: riego=" + String(riego ? "true" : "false") + ", malla=" + String(malla ? "true" : "false"));
         setBomba(riego);
-    } else {
-        Serial.println("[FB] Error leyendo riego: " + _fbData.errorReason());
+        setMalla(malla);
+        return;
     }
 
-    // Leer malla
-    if (Firebase.RTDB.getBool(&_fbData, basePath + "/malla")) {
-        bool malla = _fbData.boolData();
-        setMalla(malla);
-    } else {
-        Serial.println("[FB] Error leyendo malla: " + _fbData.errorReason());
-    }
+    // Modo automatico minimo: sensores locales + umbrales del invernadero.
+    bool accionRiego = _getBoolOr(autoPath + "/acciones/riego/bajoHumedad", true);
+    bool accionMallaTemp = _getBoolOr(autoPath + "/acciones/malla/altaTemperatura", true);
+    bool accionMallaRad = _getBoolOr(autoPath + "/acciones/malla/altaRadiacion", false);
+
+    float humedadMin = _getFloatOr(autoPath + "/umbrales/humedad/min", 40.0);
+    float tempMax = _getFloatOr(autoPath + "/umbrales/temperatura/max", 35.0);
+    float radiacionMax = _getFloatOr(autoPath + "/umbrales/radiacion/max", 900.0);
+    float radiacion = _getFloatOr(sectionPath + "/sensores/radiacion", 0.0);
+
+    bool riegoAuto = accionRiego && getHumedadSuelo() > 0.0 && getHumedadSuelo() < humedadMin;
+    bool mallaAuto = (accionMallaTemp && getTemperaturaAire() > tempMax)
+                  || (accionMallaRad && radiacion > radiacionMax);
+
+    setBomba(riegoAuto);
+    setMalla(mallaAuto);
 }
 
 // ── Heartbeat ───────────────────────────────────────────────
@@ -131,12 +252,38 @@ void firebaseSendHeartbeat() {
     }
 
     // Enviar IP
-    Firebase.RTDB.setString(&_fbData, path + "/ip", wifiGetIP());
-
-    // Enviar invernaderoId si está configurado
-    if (_invId.length() > 0) {
-        Firebase.RTDB.setString(&_fbData, path + "/invernaderoId", _invId);
+    if (!Firebase.RTDB.setString(&_fbData, path + "/ip", wifiGetIP())) {
+        Serial.println("[FB] Error IP: " + _fbData.errorReason());
     }
+
+    if (!Firebase.RTDB.setBool(&_fbData, path + "/online", true)) {
+        Serial.println("[FB] Error online: " + _fbData.errorReason());
+    }
+
+    if (_invId.length() == 0 || _secId.length() == 0) {
+        _resolveLinkedInvernadero();
+    }
+}
+
+// ── Envío de Sensores ───────────────────────────────────────
+void firebaseSendSensors(float tempAire, float humAire, float tempSuelo, float humSuelo) {
+    if (!firebaseIsReady()) return;
+    if (!_resolveLinkedInvernadero()) return;
+
+    static unsigned long _lastSensorSend = 0;
+    unsigned long now = millis();
+    
+    if (now - _lastSensorSend < FIREBASE_SENSOR_INTERVAL_MS) return;
+    _lastSensorSend = now;
+
+    String basePath = _sectionPath() + "/sensores";
+
+    // Enviar variables a la sección vinculada
+    Firebase.RTDB.setFloat(&_fbData, basePath + "/temperatura", tempAire);
+    Firebase.RTDB.setFloat(&_fbData, basePath + "/humedadAmbiente", humAire);
+
+    Firebase.RTDB.setFloat(&_fbData, basePath + "/temperaturasuelo", tempSuelo);
+    Firebase.RTDB.setFloat(&_fbData, basePath + "/humedad", humSuelo);
 }
 
 // ── Reporte serial ──────────────────────────────────────────
@@ -153,6 +300,10 @@ void firebaseSerialReport() {
     json += ",\"firebase\":" + String(firebaseIsReady() ? "true" : "false");
     json += ",\"bomba\":" + String(getBombaState() ? "true" : "false");
     json += ",\"malla\":" + String(getMallaState() ? "true" : "false");
+    json += ",\"temperatura\":" + String(getTemperaturaAire());
+    json += ",\"humedadAmbiente\":" + String(getHumedadAire());
+    json += ",\"temperaturasuelo\":" + String(getTemperaturaSuelo());
+    json += ",\"humedad\":" + String(getHumedadSuelo());
     json += ",\"invId\":\"" + _invId + "\"";
     json += ",\"secId\":\"" + _secId + "\"";
     json += ",\"uptime\":" + String(millis() / 1000);

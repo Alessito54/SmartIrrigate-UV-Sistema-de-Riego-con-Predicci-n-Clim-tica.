@@ -2,10 +2,10 @@ import { useState, useEffect } from "react";
 import { ref, set, push, remove, onValue } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
-import { isModuleOnline, linkModuloToInvernadero, unlinkModulo } from "../services/modulos";
+import { isModuleOnline, linkModuloToSeccion, unlinkModulo } from "../services/modulos";
 import {
     FiPlus, FiCheckCircle, FiLayers, FiLink, FiSettings,
-    FiChevronDown, FiChevronUp, FiDroplet, FiShield,
+    FiChevronDown, FiChevronUp,
     FiCheck, FiX, FiWifi, FiWifiOff, FiEdit2, FiTrash2
 } from "react-icons/fi";
 
@@ -43,6 +43,15 @@ const DEFAULT_SECTION = {
     sensores: { humedad: 0, radiacion: 0, temperatura: 0, viento: 0 },
 };
 
+const DEFAULT_INVERNADERO_CONTROL = {
+    control: { malla: false, riego: false },
+    controlAutomatico: {
+        activo: false,
+        acciones: { malla: { altaRadiacion: false, altaTemperatura: true }, riego: { bajoHumedad: true } },
+        umbrales: { humedad: { min: 40 }, radiacion: { max: 900 }, temperatura: { max: 35, min: 10 } },
+    },
+};
+
 // ─── Confirm modal ─────────────────────────────────────────────────────────
 function ConfirmDialog({ message, onConfirm, onCancel }) {
     return (
@@ -59,31 +68,9 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
     );
 }
 
-// ─── Control toggle ────────────────────────────────────────────────────────
-function ControlToggle({ label, icon: Icon, color, active, onToggle, disabled }) {
-    return (
-        <button
-            onClick={onToggle}
-            disabled={disabled}
-            className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border-2 transition-all active:scale-95
-                ${active ? `${color.bg} ${color.border} ${color.text} shadow-lg` : "bg-white/40 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 text-gray-400"}
-                ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:scale-105"}`}
-        >
-            <Icon size={22} />
-            <span className="text-[11px] font-bold uppercase tracking-wider">{label}</span>
-            <span className={`text-[10px] font-medium ${active ? "opacity-90" : "opacity-60"}`}>{active ? "Activado" : "Inactivo"}</span>
-        </button>
-    );
-}
-
 // ─── Section card ──────────────────────────────────────────────────────────
 function SeccionCard({ invId, secId, sec, inv, onReload }) {
     const { user, modulos } = useAuth();
-
-    // Manual controls
-    const [riego, setRiego] = useState(sec?.control?.riego ?? false);
-    const [malla, setMalla] = useState(sec?.control?.malla ?? false);
-    const [toggling, setToggling] = useState(null);
 
     // Config panel
     const [showConfig, setShowConfig] = useState(false);
@@ -108,6 +95,9 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
     // Delete
     const [confirmDelete, setConfirmDelete] = useState(false);
+    const [selectedModuloId, setSelectedModuloId] = useState("");
+    const [moduloLinking, setModuloLinking] = useState(false);
+    const [moduloUnlinking, setModuloUnlinking] = useState(false);
 
     const secPath = `invernaderos/${invId}/secciones/${secId}`;
 
@@ -166,15 +156,6 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     }
 
     // ─── Handlers ─────────────────────────────────────────────────────
-    async function toggle(tipo, nuevoVal) {
-        setToggling(tipo);
-        try {
-            await set(ref(db, `${secPath}/control/${tipo}`), nuevoVal);
-            if (tipo === "riego") setRiego(nuevoVal);
-            else setMalla(nuevoVal);
-        } finally { setToggling(null); }
-    }
-
     async function selectCultivo(c) {
         const val = `${c.emoji} ${c.nombre}`;
         await set(ref(db, `${secPath}/cultivoActual`), val);
@@ -205,14 +186,28 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     }
 
     async function eliminarSeccion() {
+        const currentLinkedMId = sec?.moduloId
+            || Object.entries(modulos || {}).find(([, m]) => m?.invernaderoId === invId && m?.seccionId === secId)?.[0];
+        if (currentLinkedMId) {
+            await unlinkModulo(currentLinkedMId, invId, secId);
+        }
         await remove(ref(db, secPath));
         await onReload();
         setConfirmDelete(false);
     }
 
     const sensors = sec?.sensores || {};
-    const linkedMId = inv?.moduloId;
+    const linkedMId = sec?.moduloId
+        || Object.entries(modulos || {}).find(([, m]) => m?.invernaderoId === invId && m?.seccionId === secId)?.[0];
+    const linkedModulo = linkedMId ? modulos[linkedMId] : null;
     const isOnline = linkedMId ? isModuleOnline(modulos[linkedMId]) : false;
+    const freeModulos = Object.entries(modulos || {}).filter(([, m]) =>
+        isModuleOnline(m) && (
+            !m.invernaderoId
+            || !m.seccionId
+            || (m.invernaderoId === invId && m.seccionId === secId)
+        )
+    );
     const presetEntries = Object.entries(presets);
 
     return (
@@ -314,19 +309,6 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                     ))}
                 </div>
 
-                {/* ══ MANUAL CONTROLS ══ */}
-                <div className="px-4 pb-4 pt-2">
-                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Control Manual</p>
-                    <div className="grid grid-cols-2 gap-2">
-                        <ControlToggle label="Riego" icon={FiDroplet}
-                            color={{ bg: "bg-sky-100 dark:bg-sky-900/40", border: "border-sky-400 dark:border-sky-700", text: "text-sky-700 dark:text-sky-400" }}
-                            active={riego} onToggle={() => toggle("riego", !riego)} disabled={toggling === "riego"} />
-                        <ControlToggle label="Malla" icon={FiShield}
-                            color={{ bg: "bg-amber-100 dark:bg-amber-900/40", border: "border-amber-400 dark:border-amber-700", text: "text-amber-700 dark:text-amber-400" }}
-                            active={malla} onToggle={() => toggle("malla", !malla)} disabled={toggling === "malla"} />
-                    </div>
-                </div>
-
                 {/* ══ CONFIG PANEL ══ */}
                 {showConfig && (
                     <div className="border-t border-gray-100 dark:border-slate-700/50 px-4 py-4 space-y-5 bg-gray-50/50 dark:bg-slate-900/30">
@@ -354,7 +336,67 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                             )}
                         </div>
 
-                        {/* El OASYS Módulo Climático se gestiona a nivel de invernadero */}
+                        <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">📡 OASYS Módulo</p>
+                            {linkedMId ? (
+                                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5">
+                                    <div className="min-w-0">
+                                        <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                                            {isOnline ? "Online" : "Offline"} · {linkedMId}
+                                        </p>
+                                        {linkedModulo?.ip && (
+                                            <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/70">
+                                                IP: {linkedModulo.ip}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            setModuloUnlinking(true);
+                                            try { await unlinkModulo(linkedMId, invId, secId); await onReload(); }
+                                            finally { setModuloUnlinking(false); }
+                                        }}
+                                        disabled={moduloUnlinking}
+                                        className="text-red-400 hover:text-red-500 p-1 transition disabled:opacity-50"
+                                        title="Desvincular módulo"
+                                    >
+                                        {moduloUnlinking ? "..." : <FiX size={14} />}
+                                    </button>
+                                </div>
+                            ) : freeModulos.length === 0 ? (
+                                <p className="text-xs text-gray-400 italic py-1">
+                                    No hay módulos disponibles o conectados
+                                </p>
+                            ) : (
+                                <div className="flex gap-2">
+                                    <select
+                                        value={selectedModuloId}
+                                        onChange={(e) => setSelectedModuloId(e.target.value)}
+                                        className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-2 py-2 outline-none focus:ring-2 focus:ring-emerald-500/40"
+                                    >
+                                        <option value="">Seleccionar módulo...</option>
+                                        {freeModulos.map(([mId]) => (
+                                            <option key={mId} value={mId}>{mId}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        onClick={async () => {
+                                            if (!selectedModuloId) return;
+                                            setModuloLinking(true);
+                                            try {
+                                                await linkModuloToSeccion(selectedModuloId, invId, secId);
+                                                await onReload();
+                                                setSelectedModuloId("");
+                                            } finally { setModuloLinking(false); }
+                                        }}
+                                        disabled={moduloLinking || !selectedModuloId}
+                                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1"
+                                    >
+                                        {moduloLinking ? "..." : <><FiLink size={12} /> Vincular</>}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {/* ══ MODO AUTOMÁTICO ══ */}
                         {autoConfig && (
@@ -487,16 +529,11 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
     const [savingName, setSavingName] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
 
-    // Module linking state
-    const linkedModuloId = inv?.moduloId || null;
-    const linkedModulo = linkedModuloId ? modulos[linkedModuloId] : null;
-    const moduleOnline = isModuleOnline(linkedModulo);
-    const freeModulos = Object.entries(modulos).filter(([, m]) =>
-        isModuleOnline(m) && (!m.invernaderoId || m.invernaderoId === invId)
-    );
-    const [selectedModuloId, setSelectedModuloId] = useState("");
-    const [moduloLinking, setModuloLinking] = useState(false);
-    const [moduloUnlinking, setModuloUnlinking] = useState(false);
+    const moduleOnline = secs.some(([sId, sec]) => {
+        const moduleId = sec?.moduloId
+            || Object.entries(modulos || {}).find(([, m]) => m?.invernaderoId === invId && m?.seccionId === sId)?.[0];
+        return moduleId ? isModuleOnline(modulos[moduleId]) : false;
+    });
 
     async function guardarNombre() {
         if (!draftName.trim()) return;
@@ -586,78 +623,6 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                 {/* Sections */}
                 {expanded && (
                     <div className="px-4 pb-4 pt-2 space-y-3">
-                        {/* ── OASYS Módulo Climático panel ── */}
-                        <div className="border border-gray-100 dark:border-slate-700/50 rounded-2xl p-3 bg-gray-50/50 dark:bg-slate-900/20">
-                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-                                OASYS Módulo Climático
-                            </p>
-                            {linkedModuloId ? (
-                                <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5">
-                                    <div className="flex items-center gap-2">
-                                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${moduleOnline ? "bg-emerald-500 animate-pulse" : "bg-gray-400"}`} />
-                                        <div>
-                                            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                                                {moduleOnline ? "Online" : "Offline"} · {linkedModuloId.length > 16 ? linkedModuloId.slice(0, 16) + "..." : linkedModuloId}
-                                            </p>
-                                            {linkedModulo?.ip && (
-                                                <p className="text-[10px] font-mono text-emerald-600/70 dark:text-emerald-400/70">
-                                                    IP: {linkedModulo.ip}
-                                                </p>
-                                            )}
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            setModuloUnlinking(true);
-                                            try { await unlinkModulo(linkedModuloId, invId); await onReload(); }
-                                            finally { setModuloUnlinking(false); }
-                                        }}
-                                        disabled={moduloUnlinking}
-                                        className="text-red-400 hover:text-red-500 p-1 transition disabled:opacity-50"
-                                        title="Desvincular módulo"
-                                    >
-                                        {moduloUnlinking ? "..." : <FiX size={14} />}
-                                    </button>
-                                </div>
-                            ) : freeModulos.length === 0 ? (
-                                <p className="text-xs text-gray-400 italic py-1">
-                                    No hay módulos disponibles o conectados
-                                </p>
-                            ) : (
-                                <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
-                                    <select
-                                        value={selectedModuloId}
-                                        onChange={(e) => setSelectedModuloId(e.target.value)}
-                                        className="flex-1 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-2 py-2 outline-none focus:ring-2 focus:ring-emerald-500/40"
-                                    >
-                                        <option value="">Seleccionar módulo...</option>
-                                        {freeModulos.map(([mId]) => (
-                                            <option key={mId} value={mId}>
-                                                {mId.length > 20 ? mId.slice(0, 20) + "..." : mId}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (!selectedModuloId) return;
-                                            setModuloLinking(true);
-                                            try {
-                                                await linkModuloToInvernadero(selectedModuloId, invId);
-                                                await onReload();
-                                                setSelectedModuloId("");
-                                            } finally { setModuloLinking(false); }
-                                        }}
-                                        disabled={moduloLinking || !selectedModuloId}
-                                        className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1"
-                                    >
-                                        {moduloLinking ? "..." : <><FiLink size={12} /> Vincular</>}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-
                         {secs.length === 0 && (
                             <p className="text-center text-sm text-gray-400 py-4">Sin secciones. Agrega una abajo.</p>
                         )}
@@ -695,7 +660,7 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
 
 // ─── Main page ─────────────────────────────────────────────────────────────
 export default function Invernaderos() {
-    const { user, invernaderos, invId, reloadInvernaderos, selectInvernadero } = useAuth();
+    const { user, invernaderos, invId, reloadInvernaderos, selectInvernadero, modulos } = useAuth();
     const [newInvName, setNewInvName] = useState("");
     const [addingInv, setAddingInv] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -713,6 +678,7 @@ export default function Invernaderos() {
             await set(invRef, {
                 nombre: newInvName.trim(),
                 estado: { online: false },
+                ...DEFAULT_INVERNADERO_CONTROL,
                 secciones: { [secRef.key]: { ...DEFAULT_SECTION, nombre: "Sección Principal" } },
             });
             await set(ref(db, `usuarios/${user.uid}/invernaderos/${newId}`), true);
@@ -723,6 +689,21 @@ export default function Invernaderos() {
     }
 
     async function eliminarInvernadero(id) {
+        const sections = Object.entries(invernaderos[id]?.secciones || {});
+        const linked = new Map();
+        for (const [sId, sec] of sections) {
+            if (sec?.moduloId) {
+                linked.set(sec.moduloId, sId);
+            }
+        }
+        Object.entries(modulos || {}).forEach(([mId, m]) => {
+            if (m?.invernaderoId === id) {
+                linked.set(mId, m?.seccionId || null);
+            }
+        });
+        for (const [linkedModuloId, sId] of linked) {
+            await unlinkModulo(linkedModuloId, id, sId);
+        }
         await remove(ref(db, `invernaderos/${id}`));
         await set(ref(db, `usuarios/${user.uid}/invernaderos/${id}`), null);
         await reloadInvernaderos();

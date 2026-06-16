@@ -5,6 +5,7 @@ import { FiMail, FiLock, FiLogIn, FiUser, FiX } from "react-icons/fi";
 import { FcGoogle } from "react-icons/fc";
 import { PROJECT_NAME, PROJECT_LOGO } from "../config";
 import bgImage from "../assets/images/campo-agricola.jpg";
+import ShaderBackground from "../components/ui/shader-background";
 
 export default function Login() {
     const { user, login, register, loginWithGoogle, resetPassword, loading: authLoading } = useAuth();
@@ -96,6 +97,8 @@ export default function Login() {
 
     return (
         <div className="min-h-screen flex text-gray-900 dark:text-gray-100 bg-white dark:bg-slate-950">
+            {/* ═══ ANIMATED SHADER BACKGROUND ═══ */}
+            <ShaderBackground />
             {/* ─── Left Side: Branding / Image ───────────────────────────── */}
             <div className="hidden lg:flex w-1/2 relative flex-col justify-between overflow-hidden bg-slate-900">
                 {/* Background Image with Overlay */}

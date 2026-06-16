@@ -3,12 +3,12 @@
 #  OASYS ESP32 — Compilar y Flashear
 #  -----------------------------------------------------------
 #  Uso:
-#    ./flash.sh              → Compilar + flashear + monitor
+#    ./flash.sh              → Borrar flash + compilar + flashear + monitor
 #    ./flash.sh --compile    → Solo compilar (sin flash)
-#    ./flash.sh --upload     → Solo flash (sin compilar)
+#    ./flash.sh --upload     → Borrar flash + flashear (sin compilar)
 #    ./flash.sh --monitor    → Solo abrir monitor serial
 #    ./flash.sh --port /dev/ttyUSB0  → Especificar puerto
-#    ./flash.sh --clean      → Limpiar build y recompilar
+#    ./flash.sh --clean      → Limpiar build, borrar flash, recompilar y flashear
 # ============================================================
 
 set -e
@@ -85,18 +85,57 @@ fi
 
 # ── Puerto serial ────────────────────────────────────────────
 PORT_FLAG=""
+detect_port() {
+    local candidate=""
+
+    # Preferir nombres persistentes cuando Linux los expone.
+    candidate=$(find /dev/serial/by-id -maxdepth 1 -type l 2>/dev/null | head -1 || true)
+    if [[ -n "$candidate" ]]; then
+        readlink -f "$candidate"
+        return 0
+    fi
+
+    # Adaptadores USB serial comunes en ESP32: CP210x, CH340/CH9102, FTDI, CDC ACM.
+    candidate=$(find /dev -maxdepth 1 \( -name 'ttyUSB*' -o -name 'ttyACM*' \) 2>/dev/null | sort | head -1 || true)
+    if [[ -n "$candidate" ]]; then
+        echo "$candidate"
+        return 0
+    fi
+
+    return 1
+}
+
+require_port() {
+    if [[ -n "$PORT" ]]; then
+        return 0
+    fi
+
+    echo -e "${RED}ERROR: No se detectó el puerto USB del ESP32.${NC}"
+    echo -e "${YELLOW}PlatformIO iba a usar /dev/ttyS0, pero ese no es el ESP32 y suele fallar.${NC}"
+    echo ""
+    echo "Haz esto:"
+    echo "  1. Desconecta y vuelve a conectar el ESP32 con cable de datos."
+    echo "  2. Cierra monitor serial, navegador Web Serial o Arduino IDE si tienen el puerto abierto."
+    echo "  3. Revisa el puerto con: find /dev -maxdepth 1 \\( -name 'ttyUSB*' -o -name 'ttyACM*' \\)"
+    echo "  4. Flashea indicando el puerto, por ejemplo:"
+    echo "     ./flash.sh --port /dev/ttyUSB0"
+    echo ""
+    echo "Si aparece advertencia de permisos/udev, instala las reglas de PlatformIO:"
+    echo "  https://docs.platformio.org/en/latest/core/installation/udev-rules.html"
+    exit 1
+}
+
 if [[ -n "$PORT" ]]; then
     PORT_FLAG="--upload-port $PORT"
     echo -e "${CYAN}Puerto especificado: ${PORT}${NC}"
 else
-    # Auto-detectar
-    DETECTED=$(ls /dev/ttyUSB* /dev/ttyACM* 2>/dev/null | head -1 || true)
+    DETECTED=$(detect_port || true)
     if [[ -n "$DETECTED" ]]; then
         PORT="$DETECTED"
         PORT_FLAG="--upload-port $PORT"
         echo -e "${CYAN}Puerto detectado: ${PORT}${NC}"
     else
-        echo -e "${YELLOW}No se detectó puerto serial. PlatformIO intentará auto-detectar.${NC}"
+        echo -e "${YELLOW}No se detectó puerto USB serial ESP32.${NC}"
     fi
 fi
 
@@ -104,6 +143,14 @@ fi
 cd "$SCRIPT_DIR"
 echo -e "${CYAN}Directorio de trabajo: $(pwd)${NC}"
 echo ""
+
+erase_flash() {
+    require_port
+    echo -e "${YELLOW}═══ Borrando flash completa (WiFi/NVS/IDs guardados)... ═══${NC}"
+    pio run -e "$ENVIRONMENT" -t erase $PORT_FLAG
+    echo -e "${GREEN}✓ Flash borrada${NC}"
+    echo ""
+}
 
 # ── Ejecutar acción ──────────────────────────────────────────
 case $ACTION in
@@ -114,12 +161,15 @@ case $ACTION in
         ;;
 
     upload)
+        require_port
+        erase_flash
         echo -e "${GREEN}═══ Flasheando ESP32... ═══${NC}"
         pio run -e "$ENVIRONMENT" -t upload $PORT_FLAG
         echo -e "${GREEN}✓ Flash exitoso${NC}"
         ;;
 
     monitor)
+        require_port
         echo -e "${GREEN}═══ Monitor Serial ═══${NC}"
         echo -e "${YELLOW}Presiona Ctrl+C para salir${NC}"
         MONITOR_PORT=""
@@ -136,6 +186,8 @@ case $ACTION in
         echo -e "${GREEN}═══ Recompilando... ═══${NC}"
         pio run -e "$ENVIRONMENT"
         echo ""
+        require_port
+        erase_flash
         echo -e "${GREEN}═══ Flasheando ESP32... ═══${NC}"
         pio run -e "$ENVIRONMENT" -t upload $PORT_FLAG
         echo -e "${GREEN}✓ Clean build + flash exitoso${NC}"
@@ -154,19 +206,24 @@ case $ACTION in
         echo ""
 
         # Compilar
-        echo -e "${CYAN}[1/3] Compilando...${NC}"
+        echo -e "${CYAN}[1/4] Compilando...${NC}"
         pio run -e "$ENVIRONMENT"
         echo -e "${GREEN}✓ Compilación exitosa${NC}"
         echo ""
+        require_port
+
+        # Borrar flash completa
+        echo -e "${CYAN}[2/4] Borrando flash completa...${NC}"
+        erase_flash
 
         # Flashear
-        echo -e "${CYAN}[2/3] Flasheando ESP32...${NC}"
+        echo -e "${CYAN}[3/4] Flasheando ESP32...${NC}"
         pio run -e "$ENVIRONMENT" -t upload $PORT_FLAG
         echo -e "${GREEN}✓ Flash exitoso${NC}"
         echo ""
 
         # Monitor
-        echo -e "${CYAN}[3/3] Abriendo monitor serial...${NC}"
+        echo -e "${CYAN}[4/4] Abriendo monitor serial...${NC}"
         echo -e "${YELLOW}Presiona Ctrl+C para salir${NC}"
         echo ""
         MONITOR_PORT=""

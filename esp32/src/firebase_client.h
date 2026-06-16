@@ -20,6 +20,10 @@ void firebasePollControl();
 // Envía timestamp al nodo modulos/{chipId}/timestamp
 void firebaseSendHeartbeat();
 
+// ── Envío de Sensores ───────────────────────────────────────
+// Envía los valores de ambiente y suelo a Firebase
+void firebaseSendSensors(float tempAire, float humAire, float tempSuelo, float humSuelo);
+
 // ── Reporte serial ──────────────────────────────────────────
 // Envía el estado actual como JSON por serial (para el monitor web)
 void firebaseSerialReport();

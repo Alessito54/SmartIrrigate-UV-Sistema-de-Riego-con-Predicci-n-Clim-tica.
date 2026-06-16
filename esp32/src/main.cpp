@@ -13,11 +13,13 @@
 
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <esp_system.h>
 
 #include "config.h"
 #include "wifi_manager.h"
 #include "actuators.h"
 #include "firebase_client.h"
+#include "sensors.h"
 
 // ── Estado global ───────────────────────────────────────────
 static bool _wifiConfigured = false;
@@ -26,6 +28,8 @@ static bool _firebaseStarted = false;
 // ── Prototipos ──────────────────────────────────────────────
 void processSerialCommand(const String& line);
 void handleSerialConfig(JsonDocument& doc);
+bool processSerialAvailable();
+void printStatusJson();
 
 // ============================================================
 //  SETUP
@@ -40,10 +44,12 @@ void setup() {
     Serial.println("  Expo Ciencia UV");
     Serial.println("============================================");
     Serial.println("[SYS] Chip ID: " + getChipId());
+    Serial.println("[SYS] Reset reason: " + String((int)esp_reset_reason()));
     Serial.println("[SYS] Iniciando...");
 
-    // 2. Actuadores
+    // 2. Actuadores y Sensores
     actuatorsInit();
+    sensorsInit();
 
     // 3. WiFi
     _wifiConfigured = wifiInit();
@@ -63,13 +69,7 @@ void setup() {
 // ============================================================
 void loop() {
     // ── Procesar comandos serial ────────────────────────────
-    if (Serial.available()) {
-        String line = Serial.readStringUntil('\n');
-        line.trim();
-        if (line.length() > 0) {
-            processSerialCommand(line);
-        }
-    }
+    processSerialAvailable();
 
     // ── Si WiFi está conectado pero Firebase no arrancó ─────
     if (_wifiConfigured && !_firebaseStarted && wifiIsConnected()) {
@@ -87,10 +87,38 @@ void loop() {
         }
     }
 
-    // ── Firebase: polling y heartbeat ───────────────────────
+    // ── Firebase: polling, heartbeat y sensores ─────────────
     if (_firebaseStarted && wifiIsConnected()) {
+        if (processSerialAvailable()) {
+            actuatorsUpdate();
+            return;
+        }
+
         firebasePollControl();
+        if (processSerialAvailable()) {
+            actuatorsUpdate();
+            return;
+        }
+
         firebaseSendHeartbeat();
+        if (processSerialAvailable()) {
+            actuatorsUpdate();
+            return;
+        }
+
+        static unsigned long lastSensorRead = 0;
+        if (millis() - lastSensorRead >= FIREBASE_SENSOR_INTERVAL_MS) {
+            lastSensorRead = millis();
+            
+            float tempA, humA;
+            readSHT31(tempA, humA);
+            
+            float tempS, humS;
+            readSHT10(tempS, humS);
+            
+            firebaseSendSensors(tempA, humA, tempS, humS);
+        }
+
         firebaseSerialReport();
     }
 
@@ -101,7 +129,57 @@ void loop() {
 // ============================================================
 //  Procesamiento de comandos serial
 // ============================================================
+bool processSerialAvailable() {
+    if (!Serial.available()) return false;
+
+    String line = Serial.readStringUntil('\n');
+    line.trim();
+    if (line.length() > 0) {
+        processSerialCommand(line);
+        return true;
+    }
+
+    return false;
+}
+
+void printStatusJson() {
+    String json = "{\"status\":\"";
+    if (!_wifiConfigured || !wifiIsConnected()) {
+        json += "needs_wifi";
+    } else if (!_firebaseStarted || !firebaseIsReady()) {
+        json += "connecting";
+    } else if (firebaseGetInvId().length() == 0 || firebaseGetSecId().length() == 0) {
+        json += "needs_link";
+    } else {
+        json += "wifi_ok";
+    }
+    json += "\",\"chipId\":\"" + getChipId() + "\"";
+    json += ",\"ssid\":\"" + wifiGetSSID() + "\"";
+    json += ",\"ip\":\"" + wifiGetIP() + "\"";
+    json += ",\"wifi\":" + String(wifiIsConnected() ? "true" : "false");
+    json += ",\"firebase\":" + String(firebaseIsReady() ? "true" : "false");
+    json += ",\"bomba\":" + String(getBombaState() ? "true" : "false");
+    json += ",\"malla\":" + String(getMallaState() ? "true" : "false");
+    json += ",\"invId\":\"" + firebaseGetInvId() + "\"";
+    json += ",\"secId\":\"" + firebaseGetSecId() + "\"";
+    json += ",\"resetReason\":" + String((int)esp_reset_reason());
+    json += "}";
+    Serial.println(json);
+}
+
 void processSerialCommand(const String& line) {
+    if (line == "status") {
+        printStatusJson();
+        return;
+    }
+
+    if (line == "scan") {
+        Serial.println("[SYS] Escaneando redes WiFi...");
+        String result = wifiScan();
+        Serial.println(result);
+        return;
+    }
+
     // Intentar parsear como JSON
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, line);
@@ -116,23 +194,7 @@ void processSerialCommand(const String& line) {
 
     // Comando: status
     if (doc["command"] == "status") {
-        String json = "{\"status\":\"";
-        if (!_wifiConfigured || !wifiIsConnected()) {
-            json += "needs_wifi";
-        } else if (!_firebaseStarted || !firebaseIsReady()) {
-            json += "connecting";
-        } else {
-            json += "wifi_ok";
-        }
-        json += "\",\"chipId\":\"" + getChipId() + "\"";
-        json += ",\"ssid\":\"" + wifiGetSSID() + "\"";
-        json += ",\"ip\":\"" + wifiGetIP() + "\"";
-        json += ",\"wifi\":" + String(wifiIsConnected() ? "true" : "false");
-        json += ",\"firebase\":" + String(firebaseIsReady() ? "true" : "false");
-        json += ",\"bomba\":" + String(getBombaState() ? "true" : "false");
-        json += ",\"malla\":" + String(getMallaState() ? "true" : "false");
-        json += "}";
-        Serial.println(json);
+        printStatusJson();
         return;
     }
 
@@ -162,7 +224,7 @@ void processSerialCommand(const String& line) {
     }
 
     // ── Configuración WiFi (desde Vinculación) ──────────────
-    if (doc.containsKey("ssid")) {
+    if (!doc["ssid"].isNull()) {
         handleSerialConfig(doc);
         return;
     }
@@ -178,14 +240,13 @@ void handleSerialConfig(JsonDocument& doc) {
     String ssid     = doc["ssid"].as<String>();
     String password = doc["password"] | "";
     String invId    = doc["invernaderoId"] | "";
+    String secId    = doc["seccionId"] | "";
     String userId   = doc["userId"] | "";
 
     Serial.println("[CFG] Configurando WiFi: " + ssid);
 
     // Guardar IDs si vienen
     if (invId.length() > 0) {
-        // El secId se obtiene de la vinculación web
-        String secId = doc["seccionId"] | "";
         wifiSaveInvernaderoConfig(invId, secId, userId);
     }
 
@@ -197,7 +258,7 @@ void handleSerialConfig(JsonDocument& doc) {
 
         // Iniciar Firebase si no estaba
         if (!_firebaseStarted) {
-            firebaseInit(invId, "");
+            firebaseInit(invId, secId);
             _firebaseStarted = true;
         }
     }

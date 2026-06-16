@@ -31,3 +31,9 @@ esp32/.vscode/
 
 # Firebase — datos sensibles
 rieguuv-default-rtdb-export.json
+
+# Certificados locales de desarrollo
+.certs/
+
+# Archivos empaquetados/exportados locales
+*.zip

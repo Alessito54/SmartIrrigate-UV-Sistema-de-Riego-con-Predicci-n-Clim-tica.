@@ -1,4 +1,4 @@
-import { ref, onValue, set } from "firebase/database";
+import { ref, get, onValue, set } from "firebase/database";
 import { db } from "./firebase";
 
 // Módulo considerado online si su heartbeat llegó hace menos de 30 segundos
@@ -12,13 +12,14 @@ const _locationCache = new Map();
  * @param {object|null} modulo — objeto del módulo de Firebase (con campo timestamp)
  */
 export function isModuleOnline(modulo) {
-  if (!modulo?.timestamp) return false;
-  return Date.now() - modulo.timestamp < ONLINE_WINDOW_MS;
+  const timestamp = Number(modulo?.timestamp);
+  if (!Number.isFinite(timestamp)) return false;
+  return Date.now() - timestamp < ONLINE_WINDOW_MS;
 }
 
 /**
  * Escucha en tiempo real todos los módulos OASYS.
- * @param {function} callback — llamado con { [moduloId]: { timestamp, ip, invernaderoId } }
+ * @param {function} callback — llamado con { [moduloId]: { timestamp, ip, invernaderoId, seccionId } }
  * @returns {function} unsuscribe
  */
 export function listenToModulos(callback) {
@@ -27,21 +28,82 @@ export function listenToModulos(callback) {
   });
 }
 
-/**
- * Vincula atómicamente un módulo a un invernadero (escritura multi-path).
- * Actualiza módulo.invernaderoId e invernadero.moduloId en una sola operación.
- */
-export async function linkModuloToInvernadero(moduloId, invId) {
-  await set(ref(db, `modulos/${moduloId}/invernaderoId`), invId);
-  await set(ref(db, `invernaderos/${invId}/moduloId`), moduloId);
+function normalizeId(value) {
+  return typeof value === "string" && value.trim() && value !== "null"
+    ? value.trim()
+    : "";
 }
 
 /**
- * Desvincula atómicamente un módulo de un invernadero.
+ * Vincula un módulo a una sección.
+ * La fuente de verdad queda en:
+ * - modulos/{moduloId}/invernaderoId
+ * - modulos/{moduloId}/seccionId
+ * - invernaderos/{invId}/secciones/{secId}/moduloId
  */
-export async function unlinkModulo(moduloId, invId) {
-  await set(ref(db, `modulos/${moduloId}/invernaderoId`), null);
+export async function linkModuloToSeccion(moduloId, invId, secId) {
+  if (!moduloId || !invId || !secId) {
+    throw new Error("Falta módulo, invernadero o sección para vincular.");
+  }
+
+  const currentInvSnap = await get(ref(db, `modulos/${moduloId}/invernaderoId`));
+  const currentSecSnap = await get(ref(db, `modulos/${moduloId}/seccionId`));
+  const currentInvId = normalizeId(currentInvSnap.val());
+  const currentSecId = normalizeId(currentSecSnap.val());
+
+  if (currentInvId && currentSecId && (currentInvId !== invId || currentSecId !== secId)) {
+    await set(ref(db, `invernaderos/${currentInvId}/secciones/${currentSecId}/moduloId`), null);
+  }
+  if (currentInvId && currentInvId !== invId) {
+    await set(ref(db, `invernaderos/${currentInvId}/moduloId`), null);
+  }
+
+  await set(ref(db, `modulos/${moduloId}/invernaderoId`), invId);
+  await set(ref(db, `modulos/${moduloId}/seccionId`), secId);
+  await set(ref(db, `modulos/${moduloId}/timestamp`), Date.now());
+  await set(ref(db, `modulos/${moduloId}/lastLinkedAt`), Date.now()).catch(() => {});
   await set(ref(db, `invernaderos/${invId}/moduloId`), null);
+  await set(ref(db, `invernaderos/${invId}/secciones/${secId}/moduloId`), moduloId);
+
+  const sectionPath = `invernaderos/${invId}/secciones/${secId}`;
+  const controlSnap = await get(ref(db, `${sectionPath}/control`));
+  if (!controlSnap.exists()) {
+    await set(ref(db, `${sectionPath}/control`), { riego: false, malla: false });
+  }
+
+  const autoSnap = await get(ref(db, `${sectionPath}/controlAutomatico`));
+  if (!autoSnap.exists()) {
+    await set(ref(db, `${sectionPath}/controlAutomatico`), {
+      activo: false,
+      acciones: {
+        riego: { bajoHumedad: true },
+        malla: { altaTemperatura: true, altaRadiacion: false },
+      },
+      umbrales: {
+        humedad: { min: 40 },
+        radiacion: { max: 900 },
+        temperatura: { max: 35, min: 10 },
+      },
+    });
+  } else {
+    await set(ref(db, `${sectionPath}/controlAutomatico/activo`), false);
+  }
+}
+
+/**
+ * Desvincula un módulo de una sección.
+ */
+export async function unlinkModulo(moduloId, invId, secId = null) {
+  const currentInvId = invId || normalizeId((await get(ref(db, `modulos/${moduloId}/invernaderoId`))).val());
+  const currentSecId = secId || normalizeId((await get(ref(db, `modulos/${moduloId}/seccionId`))).val());
+  await set(ref(db, `modulos/${moduloId}/invernaderoId`), null);
+  await set(ref(db, `modulos/${moduloId}/seccionId`), null);
+  if (currentInvId) {
+    await set(ref(db, `invernaderos/${currentInvId}/moduloId`), null);
+  }
+  if (currentInvId && currentSecId) {
+    await set(ref(db, `invernaderos/${currentInvId}/secciones/${currentSecId}/moduloId`), null);
+  }
 }
 
 /**

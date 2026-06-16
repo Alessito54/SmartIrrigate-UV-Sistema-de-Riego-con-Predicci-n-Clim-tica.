@@ -154,9 +154,9 @@ async function _handleGattDisconnected() {
 // ENVIAR CONFIGURACIÓN
 // ============================================================
 
-export async function sendWiFiConfig(ssid, password, invernaderoId, userId) {
+export async function sendWiFiConfig(ssid, password, invernaderoId, userId, seccionId = "") {
     await _ensureConnected();
-    const payload = JSON.stringify({ ssid, password, invernaderoId, userId });
+    const payload = JSON.stringify({ ssid, password, invernaderoId, seccionId, userId });
     const encoder = new TextEncoder();
     console.log(`[BLE] Enviando config: ${payload}`);
     await _charConfig.writeValueWithoutResponse(encoder.encode(payload));

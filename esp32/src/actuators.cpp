@@ -8,6 +8,13 @@ static bool _mallaMoving     = false;
 static unsigned long _mallaStartTime = 0;
 static bool _mallaTargetOpen = false;
 
+static void writeBombaRelay(bool bombaOn) {
+    const bool relayEnergized = BOMBA_CONTACTO_NC ? !bombaOn : bombaOn;
+    const int activeLevel = BOMBA_ACTIVE_HIGH ? HIGH : LOW;
+    const int inactiveLevel = BOMBA_ACTIVE_HIGH ? LOW : HIGH;
+    digitalWrite(PIN_BOMBA, relayEnergized ? activeLevel : inactiveLevel);
+}
+
 // ── Inicialización ──────────────────────────────────────────
 void actuatorsInit() {
     // Configurar pines como salida
@@ -17,7 +24,7 @@ void actuatorsInit() {
     pinMode(PIN_LED_STATUS, OUTPUT);
 
     // Estado inicial: todo apagado
-    digitalWrite(PIN_BOMBA, BOMBA_ACTIVE_HIGH ? LOW : HIGH);
+    writeBombaRelay(false);
     digitalWrite(PIN_MALLA_ABRIR, MALLA_ACTIVE_HIGH ? LOW : HIGH);
     digitalWrite(PIN_MALLA_CERRAR, MALLA_ACTIVE_HIGH ? LOW : HIGH);
     digitalWrite(PIN_LED_STATUS, LOW);
@@ -31,18 +38,15 @@ void actuatorsInit() {
 
 // ── Bomba de agua ───────────────────────────────────────────
 void setBomba(bool on) {
-    // Evitar comandos redundantes
-    if (on == _bombaState) return;
+    // Reafirmar siempre el GPIO para que el relé quede en reposo si la app
+    // no está pidiendo riego.
+    writeBombaRelay(on);
 
+    // Evitar logs redundantes si el estado lógico no cambió.
+    if (on == _bombaState) return;
     _bombaState = on;
 
-    if (on) {
-        digitalWrite(PIN_BOMBA, BOMBA_ACTIVE_HIGH ? HIGH : LOW);
-        Serial.println("[ACT] Bomba ENCENDIDA");
-    } else {
-        digitalWrite(PIN_BOMBA, BOMBA_ACTIVE_HIGH ? LOW : HIGH);
-        Serial.println("[ACT] Bomba APAGADA");
-    }
+    Serial.println(on ? "[ACT] Bomba ENCENDIDA" : "[ACT] Bomba APAGADA");
 }
 
 bool getBombaState() {

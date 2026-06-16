@@ -51,8 +51,11 @@ function GreenhouseSelector() {
         <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
           {invEntries.map(([id, inv]) => {
             const secs = Object.entries(inv?.secciones || {});
-            const invMId = inv?.moduloId;
-            const invOnline = invMId ? isModuleOnline(modulos[invMId]) : false;
+            const invOnline = secs.some(([sId, sec]) => {
+              const moduleId = sec?.moduloId
+                || Object.entries(modulos || {}).find(([, m]) => m?.invernaderoId === id && m?.seccionId === sId)?.[0];
+              return moduleId ? isModuleOnline(modulos[moduleId]) : false;
+            });
             return (
               <div key={id}>
                 <div className="px-3 py-2 bg-gray-50 dark:bg-slate-800 text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
@@ -97,12 +100,13 @@ export default function Layout({ children }) {
         {/* ═══ DESKTOP SIDEBAR — static, fixed width ═══ */}
         <aside className="
           hidden md:flex flex-col
-          relative z-30 flex-shrink-0
-          w-56
+          sticky top-0 z-30 flex-shrink-0
+          w-56 h-screen
           bg-white/60 dark:bg-slate-900/60
           backdrop-blur-2xl
           border-r border-white/60 dark:border-slate-800/50
           shadow-[2px_0_20px_rgba(0,0,0,0.04)]
+          overflow-hidden
         ">
           {/* Decorative glow */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-r-none">
@@ -128,7 +132,7 @@ export default function Layout({ children }) {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 space-y-0.5 px-3 relative z-10 overflow-y-auto">
+          <nav className="flex-1 min-h-0 space-y-0.5 px-3 relative z-10 overflow-y-auto">
             {menu.map((item) => {
               const active = pathname === item.path;
               const Icon = item.icon;

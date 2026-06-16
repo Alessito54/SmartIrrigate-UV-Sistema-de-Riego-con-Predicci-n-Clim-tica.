@@ -13,6 +13,8 @@ import { auth, db } from "../services/firebase";
 
 const googleProvider = new GoogleAuthProvider();
 const AuthContext = createContext(null);
+const SELECTED_INV_KEY = "oasys_selected_inv_id";
+const SELECTED_SEC_KEY = "oasys_selected_sec_id";
 
 export function useAuth() {
     const ctx = useContext(AuthContext);
@@ -52,13 +54,17 @@ export function AuthProvider({ children }) {
                             }
                             setInvernaderos(invData);
 
-                            // Set defaults
-                            const firstInvId = invIds[0];
+                            // Set defaults, preserving the user's last selected greenhouse.
+                            const savedInvId = localStorage.getItem(SELECTED_INV_KEY);
+                            const firstInvId = savedInvId && invIds.includes(savedInvId)
+                                ? savedInvId
+                                : invIds[0];
                             setInvId(firstInvId);
 
                             const secIds = Object.keys(invData[firstInvId]?.secciones || {});
                             if (secIds.length > 0) {
-                                setSecId(secIds[0]);
+                                const savedSecId = localStorage.getItem(SELECTED_SEC_KEY);
+                                setSecId(savedSecId && secIds.includes(savedSecId) ? savedSecId : secIds[0]);
                             }
                         }
                     }
@@ -89,15 +95,58 @@ export function AuthProvider({ children }) {
         return () => unsub();
     }, [user]);
 
+    // Mantener los invernaderos sincronizados en tiempo real.
+    useEffect(() => {
+        if (!userData?.invernaderos) return;
+
+        const invIds = Object.keys(userData.invernaderos || {});
+        if (invIds.length === 0) {
+            setInvernaderos({});
+            setInvId(null);
+            setSecId(null);
+            return;
+        }
+
+        const unsubs = invIds.map((id) =>
+            onValue(ref(db, `invernaderos/${id}`), (snap) => {
+                setInvernaderos((prev) => {
+                    const next = { ...prev };
+                    if (snap.exists()) next[id] = snap.val();
+                    else delete next[id];
+                    return next;
+                });
+            })
+        );
+
+        setInvId((current) => {
+            const savedInvId = localStorage.getItem(SELECTED_INV_KEY);
+            const nextInvId = current && invIds.includes(current)
+                ? current
+                : savedInvId && invIds.includes(savedInvId)
+                    ? savedInvId
+                    : invIds[0];
+            return nextInvId;
+        });
+
+        return () => unsubs.forEach((unsub) => unsub());
+    }, [userData]);
+
     // Switch to a specific invernadero: auto-select first section
     function selectInvernadero(id) {
+        localStorage.setItem(SELECTED_INV_KEY, id);
         setInvId(id);
         const secIds = Object.keys(invernaderos[id]?.secciones || {});
-        setSecId(secIds.length > 0 ? secIds[0] : null);
+        const savedSecId = localStorage.getItem(SELECTED_SEC_KEY);
+        const nextSecId = savedSecId && secIds.includes(savedSecId)
+            ? savedSecId
+            : secIds.length > 0 ? secIds[0] : null;
+        if (nextSecId) localStorage.setItem(SELECTED_SEC_KEY, nextSecId);
+        setSecId(nextSecId);
     }
 
     // Switch to a specific section within the current invernadero
     function selectSeccion(id) {
+        if (id) localStorage.setItem(SELECTED_SEC_KEY, id);
         setSecId(id);
     }
 
@@ -164,6 +213,12 @@ export function AuthProvider({ children }) {
             if (invSnap.exists()) invData[id] = invSnap.val();
         }
         setInvernaderos(invData);
+        setInvId((current) => {
+            const savedInvId = localStorage.getItem(SELECTED_INV_KEY);
+            if (current && invIds.includes(current)) return current;
+            if (savedInvId && invIds.includes(savedInvId)) return savedInvId;
+            return invIds[0] || null;
+        });
     }
 
     const value = {

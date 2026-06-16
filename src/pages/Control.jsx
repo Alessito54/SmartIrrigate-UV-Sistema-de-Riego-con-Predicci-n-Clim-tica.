@@ -28,7 +28,6 @@ const controlItems = {
     btnActivate: "bg-sky-600 hover:bg-sky-500 shadow-sky-600/20",
     btnDeactivate: "bg-gray-500 hover:bg-gray-400 shadow-gray-500/20",
     haloColor: "bg-sky-400/15 dark:bg-sky-400/10",
-    dbPath: "invernadero/control/riego",
   },
   malla: {
     title: "Malla sombra",
@@ -49,7 +48,6 @@ const controlItems = {
     btnActivate: "bg-amber-600 hover:bg-amber-500 shadow-amber-600/20",
     btnDeactivate: "bg-gray-500 hover:bg-gray-400 shadow-gray-500/20",
     haloColor: "bg-amber-400/15 dark:bg-amber-400/10",
-    dbPath: "invernadero/control/malla",
   },
 };
 
@@ -240,12 +238,12 @@ export default function Control() {
   }, []);
 
   const confirmarAccion = useCallback(async () => {
+    if (!sectionPath) return;
     setLoading(true);
     try {
       if (modal.type === "riego") {
         const nuevoEstado = modal.value;
         await set(ref(db, `${sectionPath}/control/riego`), nuevoEstado);
-        setRiego(nuevoEstado);
 
         if (nuevoEstado === true) {
           setInicioRiego(Date.now());
@@ -271,7 +269,6 @@ export default function Control() {
 
       if (modal.type === "malla") {
         await set(ref(db, `${sectionPath}/control/malla`), modal.value);
-        setMalla(modal.value);
       }
     } finally {
       setLoading(false);

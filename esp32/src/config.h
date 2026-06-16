@@ -19,10 +19,20 @@ static const int PIN_MALLA_CERRAR    = 14;
 // LED indicador de estado (built-in o externo)
 static const int PIN_LED_STATUS      = 2;
 
+// Sensor SHT31 (I2C)
+static const int PIN_I2C_SDA         = 21;
+static const int PIN_I2C_SCL         = 22;
+
+// Sensor SHT10 (Humedad/Temperatura de suelo)
+static const int PIN_SHT10_DATA      = 18;
+static const int PIN_SHT10_CLK       = 19;
+
 // ── Hardware: Lógica de actuadores ──────────────────────────
 // true = relé activo en HIGH, false = relé activo en LOW (invertido)
-static const bool BOMBA_ACTIVE_HIGH  = true;
+static const bool BOMBA_ACTIVE_HIGH  = false;
 static const bool MALLA_ACTIVE_HIGH  = true;
+// false = el relé solo se energiza cuando la app pide encender la bomba.
+static const bool BOMBA_CONTACTO_NC  = false;
 
 // Tiempo que el motor de la malla se mantiene activo (ms)
 static const unsigned long MALLA_ACTUACION_MS = 5000;
@@ -50,10 +60,12 @@ static const unsigned long HEARTBEAT_INTERVAL_MS      = 10000;
 static const unsigned long FIREBASE_POLL_INTERVAL_MS   = 3000;
 // Intervalo de reporte serial del estado (ms)
 static const unsigned long SERIAL_REPORT_INTERVAL_MS   = 5000;
+// Intervalo para enviar datos del sensor SHT31 a Firebase (ms)
+static const unsigned long FIREBASE_SENSOR_INTERVAL_MS = 5000;
 
 // ── Firebase: Plantillas de rutas ───────────────────────────
-// Estas se construyen dinámicamente con el invId y secId
-// Ruta base: invernaderos/{invId}/secciones/{secId}
+// Estas se construyen dinámicamente con invId + secId.
+// Ruta base de control: invernaderos/{invId}/secciones/{secId}
 // Sub-rutas:
 //   /control/riego         → bool
 //   /control/malla         → bool

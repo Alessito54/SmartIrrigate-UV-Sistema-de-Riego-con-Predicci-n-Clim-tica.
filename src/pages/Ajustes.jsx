@@ -244,7 +244,11 @@ export default function Ajustes() {
             {invEntries.map(([id, inv]) => {
               const secs = Object.entries(inv?.secciones || {});
               const isActiveInv = invId === id;
-              const online = isModuleOnline(modulos[inv?.moduloId]);
+              const online = secs.some(([sId, sec]) => {
+                const moduleId = sec?.moduloId
+                  || Object.entries(modulos || {}).find(([, m]) => m?.invernaderoId === id && m?.seccionId === sId)?.[0];
+                return moduleId ? isModuleOnline(modulos[moduleId]) : false;
+              });
               return (
                 <div key={id} className={`rounded-2xl border-2 overflow-hidden transition-all ${isActiveInv ? "border-emerald-400/60 shadow-md shadow-emerald-500/10" : "border-gray-100 dark:border-slate-700"}`}>
                   {/* Greenhouse header */}

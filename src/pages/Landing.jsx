@@ -9,6 +9,7 @@ import {
 import { FaScaleBalanced, FaHandshakeAngle, FaFacebookF, FaInstagram, FaTiktok } from "react-icons/fa6";
 import { HiOutlineLightBulb } from "react-icons/hi";
 import { PROJECT_NAME, PROJECT_LOGO, SOCIAL_FACEBOOK, SOCIAL_INSTAGRAM, SOCIAL_TIKTOK, CONTACT_EMAIL, PROMO_VIDEO_URL } from "../config";
+import ShaderBackground from "../components/ui/shader-background";
 import campoAgricola from '../assets/images/campo-agricola.jpg';
 import monitoreo from '../assets/images/monitor.jpg';
 import campoAgricola2 from '../assets/images/campo-agricola2.jpg';
@@ -82,6 +83,9 @@ export default function Landing() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 overflow-x-hidden selection:bg-emerald-500/30 scroll-smooth">
+
+            {/* ═══ ANIMATED SHADER BACKGROUND ═══ */}
+            <ShaderBackground />
 
             {/* ═══ NAV ═══ */}
             <header className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? "glass shadow-md py-3" : "bg-transparent py-5"}`}>

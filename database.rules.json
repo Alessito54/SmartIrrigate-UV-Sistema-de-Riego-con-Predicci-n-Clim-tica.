@@ -12,10 +12,34 @@
             "$invId": {
                 ".read": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
                 ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
+                "control": {
+                    ".read": true,
+                    ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                },
+                "controlAutomatico": {
+                    ".read": true,
+                    ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                },
+                "sensores": {
+                    ".read": true,
+                    ".write": true
+                },
                 "secciones": {
                     "$secId": {
                         ".read": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
-                        ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                        ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()",
+                        "control": {
+                            ".read": true,
+                            ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                        },
+                        "controlAutomatico": {
+                            ".read": true,
+                            ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                        },
+                        "sensores": {
+                            ".read": true,
+                            ".write": true
+                        }
                     }
                 }
             }
@@ -23,14 +47,26 @@
         "modulos": {
             ".read": "auth !== null",
             "$moduloId": {
+                ".read": true,
+                "invernaderoId": {
+                    ".read": true,
+                    ".write": "auth !== null && (newData.val() === null || root.child('usuarios/' + auth.uid + '/invernaderos/' + newData.val()).exists()) && (data.val() === null || !data.exists() || root.child('usuarios/' + auth.uid + '/invernaderos/' + data.val()).exists())"
+                },
+                "seccionId": {
+                    ".read": true,
+                    ".write": "auth !== null"
+                },
                 "timestamp": {
+                    ".write": true
+                },
+                "online": {
                     ".write": true
                 },
                 "ip": {
                     ".write": true
                 },
-                "invernaderoId": {
-                    ".write": "auth !== null && (newData.val() === null || root.child('usuarios/' + auth.uid + '/invernaderos/' + newData.val()).exists()) && (data.val() === null || !data.exists() || root.child('usuarios/' + auth.uid + '/invernaderos/' + data.val()).exists())"
+                "lastLinkedAt": {
+                    ".write": "auth !== null"
                 }
             }
         }

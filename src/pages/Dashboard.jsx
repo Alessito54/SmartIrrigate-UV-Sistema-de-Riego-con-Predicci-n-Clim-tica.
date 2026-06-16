@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ref, onValue } from "firebase/database";
+import { ref, onValue, remove, set } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { obtenerPronostico } from "../services/weather";
@@ -17,7 +17,7 @@ import {
   WiDayCloudy,
   WiNightClear
 } from "react-icons/wi";
-import { FiWifi, FiShield, FiChevronDown } from "react-icons/fi";
+import { FiClock, FiPlus, FiTrash2, FiWifi, FiShield, FiChevronDown } from "react-icons/fi";
 import { IoSparklesOutline } from "react-icons/io5";
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -224,6 +224,8 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
   const theme = sensorThemes[sensorKey];
   const range = sensorRanges[sensorKey];
   const percent = isOffline ? 0 : Math.min(100, Math.max(0, ((value - range.min) / (range.max - range.min)) * 100));
+  const circumference = 2 * Math.PI * 42;
+  const dashOffset = circumference - (percent / 100) * circumference;
 
   return (
     <div
@@ -234,7 +236,7 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
           : theme.gradient
         }
         glass ring-1 ${isOffline ? "ring-red-300/50 dark:ring-red-700/30" : theme.ring}
-        p-5 rounded-2xl
+        p-5 rounded-2xl min-w-0
         transition-all duration-500
         hover:shadow-xl hover:-translate-y-1
         animate-fadeUp stagger-${index + 1}
@@ -260,8 +262,7 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
         ?
       </button>
 
-      {/* Header: icon + label */}
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-4 min-w-0 pr-7">
         <div className={`${
           isOffline
             ? "bg-gradient-to-br from-red-100 to-red-50 dark:from-red-900/40 dark:to-red-900/30"
@@ -269,7 +270,7 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
         } p-2 rounded-xl`}>
           <Icon className={`text-2xl ${color}`} />
         </div>
-        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider leading-tight min-w-0">
           {sensorLabels[sensorKey]}
         </span>
       </div>
@@ -288,22 +289,49 @@ const SensorCardDash = memo(function SensorCardDash({ sensorKey, value, onHelp, 
           </p>
         </div>
       ) : (
-        <div className="mb-3">
-          <span className={`text-3xl sm:text-4xl font-extrabold tabular-nums ${color}`}>
-            {value}
-          </span>
-          <span className="text-sm font-medium text-gray-400 dark:text-gray-500 ml-1">
-            {unidades[sensorKey]}
-          </span>
+        <div className="flex items-center justify-center py-1">
+          <div className="relative h-28 w-28 sm:h-32 sm:w-32">
+            <svg className="-rotate-90 h-28 w-28 sm:h-32 sm:w-32" viewBox="0 0 100 100" aria-hidden="true">
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="9"
+                className="text-gray-200/70 dark:text-slate-700/60"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="42"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="9"
+                strokeLinecap="round"
+                strokeDasharray={circumference}
+                strokeDashoffset={dashOffset}
+                className={`${barColor.replace("bg-", "text-")} transition-all duration-700`}
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span className={`text-2xl font-extrabold tabular-nums leading-none ${color}`}>
+                {typeof value === "number" ? value.toFixed(1) : value}
+              </span>
+              <span className="text-[11px] font-semibold text-gray-400 dark:text-gray-500 mt-1">
+                {unidades[sensorKey]}
+              </span>
+              <span className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">
+                {Math.round(percent)}%
+              </span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Gauge bar */}
-      <div className="w-full h-1.5 rounded-full bg-gray-200/60 dark:bg-gray-700/30 overflow-hidden">
-        <div
-          className={`h-full rounded-full ${barColor} animate-gauge`}
-          style={{ width: `${percent}%` }}
-        />
+      <div className="mt-3 flex items-center justify-between text-[10px] font-semibold text-gray-400 dark:text-gray-500">
+        <span>{range.min}{unidades[sensorKey]}</span>
+        <span>{range.max}{unidades[sensorKey]}</span>
       </div>
     </div>
   );
@@ -354,13 +382,14 @@ const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate, title })
       className="
         relative overflow-hidden
         glass rounded-3xl
-        p-6 sm:p-8
+        p-5 sm:p-7
         shadow-lg
+        min-w-0
       "
     >
       {/* Title badge */}
       {title && (
-        <div className="absolute top-4 right-4 z-10">
+        <div className="relative z-10 mb-4 flex justify-start xl:absolute xl:top-4 xl:right-4 xl:mb-0">
           <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500 bg-white/60 dark:bg-slate-800/60 backdrop-blur px-2.5 py-1 rounded-full border border-gray-200/50 dark:border-slate-700/50">
             {title}
           </span>
@@ -370,33 +399,33 @@ const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate, title })
       <div className="pointer-events-none absolute -top-20 -right-20 w-60 h-60 rounded-full bg-emerald-400/10 dark:bg-emerald-400/5 blur-[80px]" />
       <div className="pointer-events-none absolute -bottom-16 -left-16 w-48 h-48 rounded-full bg-sky-400/10 dark:bg-sky-400/5 blur-[60px]" />
 
-      <div className="flex flex-col lg:flex-row lg:items-center gap-6 relative">
+      <div className="flex flex-col 2xl:flex-row 2xl:items-center gap-5 sm:gap-6 relative min-w-0">
         {/* City + icon */}
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-4 sm:gap-5 min-w-0">
           <div className="relative">
             <div className="absolute inset-0 rounded-2xl bg-emerald-400/20 blur-xl" />
             <img
               src={`https://openweathermap.org/img/wn/${clima.icon}@4x.png`}
-              className="w-20 h-20 sm:w-24 sm:h-24 relative z-10 drop-shadow-2xl animate-float"
+              className="w-16 h-16 sm:w-24 sm:h-24 relative z-10 drop-shadow-2xl animate-float"
               alt="Icono climático"
               loading="lazy"
             />
           </div>
-          <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-3xl font-extrabold text-gray-900 dark:text-gray-50 tracking-tight leading-tight break-words">
               {clima.ciudad}
             </h2>
             <p className="text-gray-500 dark:text-gray-400 text-xs sm:text-sm mt-0.5 tracking-wide">
               {formattedDate}
             </p>
-            <p className="text-lg sm:text-xl mt-1.5 capitalize font-semibold text-emerald-600 dark:text-emerald-400">
+            <p className="text-base sm:text-xl mt-1.5 capitalize font-semibold text-emerald-600 dark:text-emerald-400 leading-snug break-words">
               {clima.descripcion}
             </p>
           </div>
         </div>
 
         {/* Weather stats grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3 flex-1">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 sm:gap-x-6 gap-y-3 flex-1 min-w-0">
           <WeatherStat label="Temperatura" value={`${clima.temp}°C`} large />
           <WeatherStat label="Sensación" value={`${clima.feels_like}°C`} />
           <WeatherStat label="Mínima" value={`${clima.temp_min}°C`} />
@@ -427,11 +456,11 @@ const WeatherPanel = memo(function WeatherPanel({ clima, formattedDate, title })
 
 const WeatherStat = memo(function WeatherStat({ label, value, large }) {
   return (
-    <div>
-      <span className="text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+    <div className="min-w-0">
+      <span className="block text-[10px] font-medium text-gray-400 dark:text-gray-500 uppercase tracking-wider leading-tight">
         {label}
       </span>
-      <div className={`font-bold text-gray-800 dark:text-gray-100 ${large ? "text-xl sm:text-2xl" : "text-sm sm:text-base"}`}>
+      <div className={`font-bold text-gray-800 dark:text-gray-100 leading-tight break-words ${large ? "text-lg sm:text-2xl" : "text-sm sm:text-base"}`}>
         {value}
       </div>
     </div>
@@ -468,8 +497,8 @@ const StatusCard = memo(function StatusCard({ title, icon, status, description, 
   return (
     <div
       className={`
-        glass rounded-2xl p-4 
-        flex items-center gap-4
+        glass rounded-2xl p-3.5
+        flex items-center gap-3
         transition-all duration-300
         hover:shadow-md
         border-l-[3px] ${accentColor}
@@ -494,7 +523,7 @@ const StatusCard = memo(function StatusCard({ title, icon, status, description, 
           )}
         </div>
         <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-0.5">{status}</p>
-        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">{description}</p>
+        <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 leading-snug">{description}</p>
       </div>
     </div>
   );
@@ -517,7 +546,18 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
 
 // ─── OASYS offline placeholder ────────────────────────────────────────
 
-const OASYSOfflinePanel = memo(function OASYSOfflinePanel() {
+const OASYSOfflinePanel = memo(function OASYSOfflinePanel({ moduloId, moduleOnline }) {
+  const title = !moduloId
+    ? "Sin módulo activo"
+    : moduleOnline
+      ? "Módulo online"
+      : "Sin conexión";
+  const detail = !moduloId
+    ? "Vincula un ESP32 a este invernadero"
+    : moduleOnline
+      ? "Conectado; clima por ubicación no disponible"
+      : "Esperando heartbeat del ESP32";
+
   return (
     <div className="relative rounded-3xl overflow-hidden shadow-lg">
       {/* Blurred skeleton underneath */}
@@ -548,7 +588,8 @@ const OASYSOfflinePanel = memo(function OASYSOfflinePanel() {
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl px-8 py-5 text-center shadow-2xl border border-gray-200/50 dark:border-slate-700/50">
           <p className="text-3xl mb-2">📡</p>
           <p className="text-sm font-bold text-gray-700 dark:text-gray-300">OASYS Módulo Climático</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Sin módulo activo</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{title}</p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{detail}</p>
         </div>
       </div>
     </div>
@@ -563,6 +604,11 @@ export default function Dashboard() {
   const [sensores, setSensores] = useState(null);
   const [riego, setRiego] = useState(null);
   const [malla, setMalla] = useState(null);
+  const [automatico, setAutomatico] = useState(false);
+  const [riegoProgramado, setRiegoProgramado] = useState({});
+  const [scheduleTime, setScheduleTime] = useState("06:00");
+  const [scheduleDuration, setScheduleDuration] = useState(10);
+  const [scheduleType, setScheduleType] = useState("goteo");
   const [clima, setClima] = useState(null);
   const [moduloClima, setModuloClima] = useState(null);
   const [ia, setIa] = useState(null);
@@ -570,7 +616,12 @@ export default function Dashboard() {
   const [moduloLocation, setModuloLocation] = useState(null);
 
   // Estado derivado del módulo OASYS (sin listener propio: usa el de AuthContext)
-  const moduloId = invId ? invernaderos[invId]?.moduloId : null;
+  const linkedModuloEntry = invId && secId
+    ? Object.entries(modulos || {}).find(([, modulo]) => modulo?.invernaderoId === invId && modulo?.seccionId === secId)
+    : null;
+  const moduloId = invId && secId
+    ? (invernaderos[invId]?.secciones?.[secId]?.moduloId || linkedModuloEntry?.[0] || null)
+    : null;
   const moduloData = moduloId ? modulos[moduloId] : null;
   const moduleOnline = isModuleOnline(moduloData);
 
@@ -578,9 +629,17 @@ export default function Dashboard() {
   useEffect(() => {
     if (!sectionPath || !invPath) return;
     const unsubs = [
-      onValue(ref(db, `${sectionPath}/sensores`), (s) => setSensores(s.val())),
-      onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val())),
-      onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val())),
+      onValue(ref(db, `${invPath}/sensores`), (s) => {
+        const rootSensors = s.val();
+        if (rootSensors) setSensores((current) => current || rootSensors);
+      }),
+      onValue(ref(db, `${sectionPath}/sensores`), (s) => {
+        setSensores(s.val() || null);
+      }),
+      onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val() === true)),
+      onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val() === true)),
+      onValue(ref(db, `${sectionPath}/controlAutomatico/activo`), (s) => setAutomatico(s.val() === true)),
+      onValue(ref(db, `${sectionPath}/controlAutomatico/programaciones/riego`), (s) => setRiegoProgramado(s.val() || {})),
     ];
     return () => unsubs.forEach((unsub) => unsub());
   }, [sectionPath, invPath]);
@@ -694,6 +753,41 @@ export default function Dashboard() {
     alert(sensorDescripciones[sensorKey]);
   }, []);
 
+  const programaciones = useMemo(
+    () => Object.entries(riegoProgramado || {})
+      .map(([id, item]) => ({ id, ...item }))
+      .sort((a, b) => String(a.hora || "").localeCompare(String(b.hora || ""))),
+    [riegoProgramado]
+  );
+
+  const proximoRiego = useMemo(() => {
+    if (programaciones.length === 0) return null;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return programaciones.find((item) => {
+      const [hour, minute] = String(item.hora || "00:00").split(":").map(Number);
+      return hour * 60 + minute >= nowMinutes;
+    }) || programaciones[0];
+  }, [programaciones]);
+
+  const agregarRiegoProgramado = useCallback(async () => {
+    if (!sectionPath || !scheduleTime) return;
+    const id = `${scheduleTime.replace(":", "")}_${Date.now()}`;
+    const duracionMin = Math.min(120, Math.max(1, Number(scheduleDuration) || 1));
+    await set(ref(db, `${sectionPath}/controlAutomatico/programaciones/riego/${id}`), {
+      hora: scheduleTime,
+      duracionMin,
+      tipo: scheduleType,
+      activo: true,
+      creadoEn: Date.now(),
+    });
+  }, [sectionPath, scheduleTime, scheduleDuration, scheduleType]);
+
+  const eliminarRiegoProgramado = useCallback(async (id) => {
+    if (!sectionPath || !id) return;
+    await remove(ref(db, `${sectionPath}/controlAutomatico/programaciones/riego/${id}`));
+  }, [sectionPath]);
+
   const greeting = useMemo(() => getGreeting(), []);
 
   return (
@@ -738,8 +832,11 @@ export default function Dashboard() {
                   <div className="absolute top-full right-0 mt-1 z-50 w-64 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
                     {invEntries.map(([iId, inv]) => {
                       const secs = Object.entries(inv?.secciones || {});
-                      const iMId = inv?.moduloId;
-                      const iOnline = iMId ? isModuleOnline(modulos[iMId]) : false;
+                      const iOnline = secs.some(([sId]) => {
+                        const secModuleId = inv?.secciones?.[sId]?.moduloId
+                          || Object.entries(modulos || {}).find(([, modulo]) => modulo?.invernaderoId === iId && modulo?.seccionId === sId)?.[0];
+                        return secModuleId ? isModuleOnline(modulos[secModuleId]) : false;
+                      });
                       return (
                         <div key={iId}>
                           <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
@@ -808,7 +905,7 @@ export default function Dashboard() {
       </header>
 
       {/* ═══ WEATHER PANELS ═══ */}
-      <div className={`grid gap-6 ${moduloId ? "xl:grid-cols-2" : ""}`}>
+      <div className="grid gap-6">
         {/* Panel usuario */}
         {clima ? (
           <WeatherPanel clima={clima} formattedDate={formattedDate} title="Tu ubicación" />
@@ -821,7 +918,7 @@ export default function Dashboard() {
           moduleOnline && moduloClima ? (
             <WeatherPanel clima={moduloClima} formattedDate={formattedDate} title="📡 OASYS Módulo" />
           ) : (
-            <OASYSOfflinePanel />
+            <OASYSOfflinePanel moduloId={moduloId} moduleOnline={moduleOnline} />
           )
         )}
       </div>
@@ -845,7 +942,7 @@ export default function Dashboard() {
 
       {/* ═══ MAIN GRID ═══ */}
       {secId && (
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
 
         {/* Left column: sensors + IA */}
         <div className="space-y-6">
@@ -868,7 +965,7 @@ export default function Dashboard() {
             </div>
 
             {sensores ? (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-4">
                 {sensorEntries.map(([key, value], i) => (
                   <SensorCardDash
                     key={key}
@@ -904,8 +1001,8 @@ export default function Dashboard() {
         </div>
 
         {/* Right column: system status */}
-        <aside className="space-y-4">
-          <div>
+        <aside className="flex flex-col gap-3">
+          <div className="order-1">
             <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
               Estado del sistema
             </h2>
@@ -914,7 +1011,7 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <div className="space-y-3">
+          <div className="order-2 space-y-2.5">
             <StatusCard
               title="OASYS Módulo Climático"
               icon={<FiWifi className="text-2xl text-emerald-500" />}
@@ -943,8 +1040,127 @@ export default function Dashboard() {
             />
           </div>
 
+          <div className="order-3 glass rounded-2xl p-3.5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                  <FiClock className="text-emerald-500" />
+                  Riego por hora
+                </h3>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+                  Agenda horarios fijos para complementar el riego por sensores.
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${automatico ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-gray-400"}`}>
+                {automatico ? "Auto ON" : "Auto OFF"}
+              </span>
+            </div>
+
+            <div className="mb-3 rounded-xl border border-emerald-200/70 dark:border-emerald-800/40 bg-emerald-50/70 dark:bg-emerald-900/15 px-3 py-2">
+              <p className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">
+                Próximo riego
+              </p>
+              <p className="text-sm font-semibold text-gray-800 dark:text-gray-100 mt-0.5">
+                {proximoRiego
+                  ? `${proximoRiego.hora} · ${proximoRiego.duracionMin || 1} min · ${proximoRiego.tipo || "riego"}`
+                  : "Sin horario definido"}
+              </p>
+              {!automatico && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                  Activa el modo automático para editar la agenda.
+                </p>
+              )}
+            </div>
+
+            <div className={`grid grid-cols-2 gap-2 ${automatico ? "" : "opacity-50"}`}>
+              <label className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  Hora de inicio
+                </span>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  disabled={!automatico}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  Duración (min)
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={scheduleDuration}
+                  onChange={(e) => setScheduleDuration(e.target.value)}
+                  disabled={!automatico}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  title="Duración en minutos"
+                />
+              </label>
+              <label className="col-span-2 space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                  Tipo de riego
+                </span>
+                <select
+                  value={scheduleType}
+                  onChange={(e) => setScheduleType(e.target.value)}
+                  disabled={!automatico}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-800/70 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value="goteo">Goteo lento</option>
+                  <option value="aspersión">Aspersión</option>
+                  <option value="manual">Pulso programado</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={agregarRiegoProgramado}
+                disabled={!automatico}
+                className="col-span-2 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              >
+                <FiPlus size={14} />
+                Agregar riego
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {programaciones.length === 0 ? (
+                <div className="text-center py-3 px-3 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                    Sin riegos programados
+                  </p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                    Agrega una hora y duración para crear la primera agenda.
+                  </p>
+                </div>
+              ) : (
+                programaciones.map((item) => (
+                  <div key={item.id} className="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/45 dark:bg-slate-800/45 border border-gray-200/70 dark:border-slate-700/70">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{item.hora}</p>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
+                        {item.tipo || "riego"} · {item.duracionMin || 1} min
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => eliminarRiegoProgramado(item.id)}
+                      className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                      title="Eliminar riego"
+                    >
+                      <FiTrash2 size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
           {/* Quick summary card */}
-          <div className="glass rounded-2xl p-4 mt-2">
+          <div className="order-4 glass rounded-2xl p-3.5">
             <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               Resumen rápido
             </h3>

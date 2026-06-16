@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
     isModuleOnline,
-    linkModuloToInvernadero,
+    linkModuloToSeccion,
     unlinkModulo,
     getModuloLocation,
 } from "../services/modulos";
@@ -19,6 +19,8 @@ import {
     listenForStatusUsb,
     disconnectUsb,
     isConnected as usbIsConnected,
+    getDeviceName,
+    getLastStatus,
 } from "../services/usbService";
 import {
     FiLink, FiCheckCircle, FiAlertTriangle, FiX,
@@ -31,14 +33,42 @@ const STATUS_LABELS = {
     idle:       "Conectado — listo para configurar",
     connecting: "Conectando al WiFi...",
     needs_wifi: "Sin WiFi — primero configura la red",
+    needs_link: "WiFi conectado — falta vincular invernadero",
     wifi_ok:    "WiFi conectado — listo para vincular",
     firebase_ok: "Firebase listo — vinculación en curso",
     vinculado:  "¡Vinculado exitosamente!",
     error:      "Error al configurar",
 };
 
+const RESET_REASONS = {
+    1: "arranque por energía/USB",
+    3: "reinicio por software",
+    4: "crash/panic del firmware",
+    5: "watchdog de interrupción",
+    6: "watchdog de tarea",
+    7: "watchdog general",
+    9: "brownout: caída de voltaje/alimentación",
+};
+
+function formatResetReason(code) {
+    if (code === undefined || code === null) return "causa no reportada";
+    return RESET_REASONS[Number(code)] || `código ${code}`;
+}
+
+function parseJsonFromSerialLine(line) {
+    const start = line.indexOf("{");
+    const end = line.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+
+    try {
+        return JSON.parse(line.slice(start, end + 1));
+    } catch {
+        return null;
+    }
+}
+
 export default function Vinculacion() {
-    const { invernaderos, modulos, reloadInvernaderos, user } = useAuth();
+    const { invernaderos, modulos, reloadInvernaderos, user, selectInvernadero, selectSeccion } = useAuth();
 
     // ── Módulos existentes ────────────────────────────────────────────────────
     const [unlinkingId,  setUnlinkingId]  = useState(null);
@@ -55,31 +85,62 @@ export default function Vinculacion() {
     const [esperandoReinicio, setEsperandoReinicio] = useState(false);
     const [scanModalOpen, setScanModalOpen] = useState(false);
     const [scanResults, setScanResults] = useState([]);
+    const [scanError, setScanError] = useState("");
     const [serialLogs, setSerialLogs] = useState([]);
+    const scanInFlightRef = useRef(false);
+    const scanStartedRef = useRef(false);
     const serialLogRef = useRef(null);
+    const statusTimerRef = useRef(null);
 
     // ── Formulario de config ──────────────────────────────────────────────────
     const [ssid,     setSsid]     = useState("");
     const [password, setPassword] = useState("");
     const [showPw,   setShowPw]   = useState(false);
     const [invId,    setInvId]    = useState("");
+    const [secId,    setSecId]    = useState("");
 
     // ── Datos derivados ───────────────────────────────────────────────────────
     const moduloEntries   = Object.entries(modulos);
     const invEntries      = Object.entries(invernaderos || {});
-    const invAvailable    = invEntries.filter(([, inv]) => !inv?.moduloId);
-    const activeLinkings  = invEntries
-        .filter(([, inv]) => inv?.moduloId)
-        .map(([iId, inv]) => ({
-            invId:    iId,
-            invName:  inv.nombre || iId.slice(-8),
-            moduloId: inv.moduloId,
-            modulo:   modulos[inv.moduloId] || null,
-        }));
+    const sectionEntries   = invEntries.flatMap(([iId, inv]) =>
+        Object.entries(inv?.secciones || {}).map(([sId, sec]) => ({ iId, inv, sId, sec }))
+    );
+    const moduleForSection = (iId, sId, sec) => {
+        const directModuloId = sec?.moduloId;
+        if (directModuloId) {
+            return { moduloId: directModuloId, modulo: modulos[directModuloId] || null };
+        }
+
+        const entry = Object.entries(modulos || {}).find(([, modulo]) =>
+            modulo?.invernaderoId === iId && modulo?.seccionId === sId
+        );
+        return entry ? { moduloId: entry[0], modulo: entry[1] } : null;
+    };
+    const sectionsAvailable = sectionEntries.filter(({ iId, sId, sec }) =>
+        !moduleForSection(iId, sId, sec)
+    );
+    const activeLinkings  = sectionEntries
+        .map(({ iId, inv, sId, sec }) => {
+            const link = moduleForSection(iId, sId, sec);
+            if (!link) return null;
+            return {
+                invId:    iId,
+                invName:  inv.nombre || iId.slice(-8),
+                secId:    sId,
+                secName:  sec.nombre || sId.slice(-8),
+                moduloId: link.moduloId,
+                modulo:   link.modulo,
+            };
+        })
+        .filter(Boolean);
 
     const usbAvailable = isUsbSupported();
     const usbReason    = getUsbUnavailableReason();
-    const wifiReady = usbStatus?.status === "wifi_ok" || usbStatus?.status === "vinculado" || usbStatus?.firebase === true || usbStatus?.wifi === true;
+    const wifiReady = usbStatus?.status === "wifi_ok"
+        || usbStatus?.status === "needs_link"
+        || usbStatus?.status === "vinculado"
+        || usbStatus?.firebase === true
+        || usbStatus?.wifi === true;
 
     // Geolocalización de módulos online
     useEffect(() => {
@@ -105,6 +166,81 @@ export default function Vinculacion() {
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
     }, [serialLogs]);
 
+    async function handleUsbStatus(st) {
+        if (st?.type === "raw") {
+            setSerialLogs((prev) => {
+                const next = [...prev, `[ESP32] ${st.line}`];
+                return next.slice(-250);
+            });
+            const parsedRaw = parseJsonFromSerialLine(st.line);
+            if (parsedRaw) {
+                handleUsbMessage(parsedRaw);
+            }
+            if (scanInFlightRef.current && st.line.includes("Recibido (no-JSON)")) {
+                setUsbScanLoading(false);
+                setScanError("El ESP32 recibió el comando, pero el firmware no reconoce el escaneo. Flashea el firmware actualizado.");
+            }
+            return;
+        }
+
+        if (st && st.monitor) {
+            setSerialLogs((prev) => {
+                const next = [...prev, `[MONITOR:${st.monitor}] ${JSON.stringify(st.payload ?? {})}`];
+                return next.slice(-250);
+            });
+            setUsbStatus(st.payload ? st.payload : { monitor: st.monitor });
+            return;
+        }
+
+        handleUsbMessage(st);
+
+        if (st.status === "wifi_ok") {
+            setEsperandoReinicio(false);
+            if (st.ssid) setSsid(st.ssid);
+            setGlobalStatus({
+                type: "success",
+                msg: `WiFi conectado (${st.ssid || ssid || "red configurada"}). Ya puedes asignar el invernadero desde la app.`,
+            });
+        }
+
+        if (st.status === "needs_wifi") {
+            setEsperandoReinicio(false);
+            setGlobalStatus({
+                type: "error",
+                msg: "El módulo no tiene WiFi. Primero configura la red para continuar con Firebase y la vinculación.",
+            });
+        }
+
+        if (st.status === "vinculado") {
+            setEsperandoReinicio(false);
+            await reloadInvernaderos();
+            setGlobalStatus({
+                type: "success",
+                msg: `¡Módulo ${st.chipId?.slice(-8) || ""} vinculado a "${invernaderos[invId]?.nombre || invId}" exitosamente!`,
+            });
+            setUsbPanel(false);
+            setUsbDevice(null);
+        }
+    }
+
+    useEffect(() => {
+        if (!usbIsConnected()) return;
+
+        setUsbDevice(getDeviceName() || "OASYS (USB)");
+        setUsbPanel(true);
+        const lastStatus = getLastStatus();
+        if (lastStatus) {
+            handleUsbMessage(lastStatus);
+        }
+        listenForStatusUsb(handleUsbStatus).then(() => {
+            setTimeout(() => {
+                requestDeviceStatusUsb().catch(() => {});
+            }, 300);
+        }).catch((err) => {
+            setGlobalStatus({ type: "error", msg: `USB: ${err.message}` });
+        });
+    }, []);
+
     // ── Conectar por USB ──────────────────────────────────────────────────────
     async function handleUsbConnect() {
         if (!usbAvailable) {
@@ -117,13 +253,22 @@ export default function Vinculacion() {
         setSsid("");
         setPassword("");
         setInvId("");
+        setSecId("");
 
         try {
             const onDisconnect = () => {
+                if (statusTimerRef.current) {
+                    clearTimeout(statusTimerRef.current);
+                    statusTimerRef.current = null;
+                }
+                scanInFlightRef.current = false;
+                scanStartedRef.current = false;
                 setUsbDevice(null);
                 setUsbStatus((prev) => prev ?? { status: "error", error: "Puerto USB desconectado" });
+                setUsbPanel(false);
+                setUsbScanLoading(false);
                 if (!usbSending && !esperandoReinicio) {
-                    setGlobalStatus({ type: "error", msg: "El módulo se desconectó del cable USB. Si fue reinicio, espera reconexión automática." });
+                    setGlobalStatus({ type: "info", msg: "El ESP32 reinició el puerto USB. Presiona de nuevo “Conectar módulo USB” y luego escanea redes." });
                 }
             };
 
@@ -131,66 +276,11 @@ export default function Vinculacion() {
             setUsbDevice(name);
             setUsbPanel(true);
 
-            await listenForStatusUsb(async (st) => {
-                if (st?.type === "raw") {
-                    setSerialLogs((prev) => {
-                        const next = [...prev, `[ESP32] ${st.line}`];
-                        return next.slice(-250);
-                    });
-                    return;
-                }
+            await listenForStatusUsb(handleUsbStatus);
 
-                // Manejar mensajes envueltos por el "monitor" (payload JSON enviado por el ESP32)
-                if (st && st.monitor) {
-                    setSerialLogs((prev) => {
-                        const next = [...prev, `[MONITOR:${st.monitor}] ${JSON.stringify(st.payload ?? {})}`];
-                        return next.slice(-250);
-                    });
-                    setUsbStatus(st.payload ? st.payload : { monitor: st.monitor });
-                    return;
-                }
-
-                setUsbStatus(st);
-
-                if (st.scan || st.networks) {
-                    const networks = (st.scan || st.networks).map((entry) =>
-                        typeof entry === "string" ? { ssid: entry } : entry
-                    );
-                    setScanResults(networks);
-                    setScanModalOpen(true);
-                    setUsbScanLoading(false);
-                }
-
-                if (st.status === "wifi_ok") {
-                    setEsperandoReinicio(false);
-                    if (st.ssid) setSsid(st.ssid);
-                    setGlobalStatus({
-                        type: "success",
-                        msg: `WiFi conectado (${st.ssid || ssid || "red configurada"}). Ya puedes asignar el invernadero desde la app.`,
-                    });
-                }
-
-                if (st.status === "needs_wifi") {
-                    setEsperandoReinicio(false);
-                    setGlobalStatus({
-                        type: "error",
-                        msg: "El módulo no tiene WiFi. Primero configura la red para continuar con Firebase y la vinculación.",
-                    });
-                }
-
-                if (st.status === "vinculado") {
-                    setEsperandoReinicio(false);
-                    await reloadInvernaderos();
-                    setGlobalStatus({
-                        type: "success",
-                        msg: `¡Módulo ${st.chipId?.slice(-8) || ""} vinculado a "${invernaderos[invId]?.nombre || invId}" exitosamente!`,
-                    });
-                    setUsbPanel(false);
-                    setUsbDevice(null);
-                }
-            });
-
-            await requestDeviceStatusUsb().catch(() => {});
+            setTimeout(() => {
+                requestDeviceStatusUsb().catch(() => {});
+            }, 700);
         } catch (err) {
             if (err.name !== "NotFoundError") {
                 setGlobalStatus({ type: "error", msg: `USB: ${err.message}` });
@@ -200,8 +290,57 @@ export default function Vinculacion() {
         }
     }
 
+    function handleUsbMessage(st) {
+        if (scanInFlightRef.current && st.status === "needs_wifi") {
+            if (scanStartedRef.current) {
+                scanInFlightRef.current = false;
+                scanStartedRef.current = false;
+                setUsbScanLoading(false);
+                setScanError(`El ESP32 se reinició durante el escaneo WiFi (${formatResetReason(st.resetReason)}). Prueba otro cable/puerto USB o escribe el SSID manualmente para continuar.`);
+                setScanModalOpen(true);
+            }
+            return;
+        }
+
+        setUsbStatus(st);
+
+        if (st.scanStatus) {
+            if (st.scanStatus === "start") {
+                scanStartedRef.current = true;
+            }
+            setSerialLogs((prev) => {
+                const next = [...prev, `[SCAN] ${st.scanStatus}${st.count !== undefined ? ` count=${st.count}` : ""}${st.code !== undefined ? ` code=${st.code}` : ""}`];
+                return next.slice(-250);
+            });
+        }
+
+        if (Array.isArray(st.scan) || Array.isArray(st.networks)) {
+            scanInFlightRef.current = false;
+            scanStartedRef.current = false;
+            const networks = (st.scan || st.networks).map((entry) =>
+                typeof entry === "string" ? { ssid: entry } : entry
+            );
+            setScanResults(networks);
+            if (st.error) {
+                setScanError(`Error del ESP32: ${st.error}${st.code !== undefined ? ` (${st.code})` : ""}`);
+            } else if (st.count === 0) {
+                setScanError("El ESP32 respondió, pero no encontró redes 2.4 GHz cercanas.");
+            } else {
+                setScanError("");
+            }
+            setScanModalOpen(true);
+            setUsbScanLoading(false);
+        }
+    }
+
     // ── Desconectar USB manualmente ───────────────────────────────────────────
     async function handleUsbDisconnect() {
+        if (statusTimerRef.current) {
+            clearTimeout(statusTimerRef.current);
+            statusTimerRef.current = null;
+        }
+        scanInFlightRef.current = false;
+        scanStartedRef.current = false;
         await disconnectUsb().catch(() => {});
         setUsbDevice(null);
         setUsbPanel(false);
@@ -220,24 +359,28 @@ export default function Vinculacion() {
                     throw new Error("Escribe el SSID de la red WiFi.");
                 }
                 setEsperandoReinicio(true);
-                await sendWiFiConfigUsb(ssid.trim(), password, "", user?.uid ?? "");
+                setSerialLogs((prev) => [...prev, `[TX] wifi ${ssid.trim()}`].slice(-250));
+                await sendWiFiConfigUsb(ssid.trim(), password, invId || "", user?.uid ?? "", secId || "");
                 setGlobalStatus({
                     type: "info",
                     msg: "WiFi enviada. El módulo se reiniciará; espera a que vuelva a responder con estado WiFi OK.",
                 });
             } else {
-                if (!invId) {
-                    throw new Error("Selecciona un invernadero para vincular.");
+                if (!invId || !secId) {
+                    throw new Error("Selecciona una sección para vincular.");
                 }
                 if (!usbStatus?.chipId) {
                     throw new Error("No se recibió el Chip ID del módulo.");
                 }
-                await linkModuloToInvernadero(usbStatus.chipId, invId);
+                await linkModuloToSeccion(usbStatus.chipId, invId, secId);
                 await reloadInvernaderos();
+                selectInvernadero(invId);
+                selectSeccion(secId);
                 setEsperandoReinicio(false);
+                const secName = invernaderos[invId]?.secciones?.[secId]?.nombre || secId;
                 setGlobalStatus({
                     type: "success",
-                    msg: `Módulo vinculado a "${invernaderos[invId]?.nombre || invId}".`,
+                    msg: `Módulo vinculado a "${invernaderos[invId]?.nombre || invId}" · sección "${secName}".`,
                 });
             }
         } catch (err) {
@@ -282,11 +425,11 @@ export default function Vinculacion() {
     }
 
     // ── Desvincular módulo ────────────────────────────────────────────────────
-    async function handleUnlink(moduloId, iId) {
+    async function handleUnlink(moduloId, iId, sId) {
         setUnlinkingId(moduloId);
         setGlobalStatus(null);
         try {
-            await unlinkModulo(moduloId, iId);
+            await unlinkModulo(moduloId, iId, sId);
             await reloadInvernaderos();
             setGlobalStatus({ type: "success", msg: "Módulo desvinculado correctamente." });
         } catch (err) {
@@ -309,7 +452,7 @@ export default function Vinculacion() {
                     Configurar módulo OASYS
                 </h1>
                 <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-xl">
-                    Conecta el módulo a tu laptop con un cable USB para configurarlo por fases: primero WiFi y después invernadero.
+                    Conecta el módulo a tu laptop con un cable USB para configurarlo por fases: primero WiFi y después la sección.
                     Una vez vinculado, puedes desconectar el cable.
                 </p>
             </header>
@@ -346,7 +489,7 @@ export default function Vinculacion() {
                             Configurar módulo nuevo
                         </h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Primero configura WiFi. Cuando el ESP32 confirme WiFi OK, se habilita la vinculación al invernadero.
+                            Primero configura WiFi. Cuando el ESP32 confirme WiFi OK, se habilita la vinculación a una sección.
                         </p>
                     </div>
 
@@ -472,13 +615,23 @@ export default function Vinculacion() {
                                                     try {
                                                         setUsbScanLoading(true);
                                                         setScanResults([]);
+                                                        setScanError("");
+                                                        scanInFlightRef.current = true;
+                                                        scanStartedRef.current = false;
                                                         setScanModalOpen(true);
+                                                        setSerialLogs((prev) => [...prev, "[TX] scan"].slice(-250));
                                                         await requestWiFiScanUsb();
                                                     } catch (err) {
                                                         setGlobalStatus({ type: "error", msg: `Error al solicitar escaneo: ${err.message}` });
                                                         setUsbScanLoading(false);
                                                     } finally {
-                                                        setTimeout(() => setUsbScanLoading(false), 7000);
+                                                        setTimeout(() => {
+                                                            if (!scanInFlightRef.current) return;
+                                                            scanInFlightRef.current = false;
+                                                            scanStartedRef.current = false;
+                                                            setUsbScanLoading(false);
+                                                            setScanError("Sin respuesta del ESP32. Revisa que el firmware nuevo esté flasheado y que el puerto no esté ocupado.");
+                                                        }, 70000);
                                                     }
                                                 }}
                                                 className="px-3 py-1.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl text-sm"
@@ -524,30 +677,34 @@ export default function Vinculacion() {
                                 </div>
                             )}
 
-                            {/* Invernadero */}
+                            {/* Sección */}
                             <div className="sm:col-span-2">
                                 <label className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                                    Asignar al invernadero
+                                    Asignar a la sección
                                 </label>
                                 {!wifiReady ? (
                                     <div className="mt-1.5 px-4 py-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-700 dark:text-amber-300">
-                                        Primero conecta WiFi. Cuando el ESP32 responda con <strong>WiFi OK</strong>, podrás asignar el invernadero.
+                                        Primero conecta WiFi. Cuando el ESP32 responda con <strong>WiFi OK</strong>, podrás asignar la sección.
                                     </div>
-                                ) : invAvailable.length === 0 ? (
+                                ) : sectionsAvailable.length === 0 ? (
                                     <p className="mt-1.5 text-xs text-amber-500 italic">
-                                        Todos los invernaderos ya tienen un módulo asignado.
+                                        Todas las secciones ya tienen un módulo asignado.
                                     </p>
                                 ) : (
                                     <div className="relative mt-1.5">
                                         <select
-                                            value={invId}
-                                            onChange={(e) => setInvId(e.target.value)}
+                                            value={invId && secId ? `${invId}::${secId}` : ""}
+                                            onChange={(e) => {
+                                                const [nextInvId, nextSecId] = e.target.value.split("::");
+                                                setInvId(nextInvId || "");
+                                                setSecId(nextSecId || "");
+                                            }}
                                             className="w-full appearance-none px-4 py-2.5 pr-9 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
                                         >
-                                            <option value="">Seleccionar invernadero...</option>
-                                            {invAvailable.map(([iId, inv]) => (
-                                                <option key={iId} value={iId}>
-                                                    {inv.nombre || iId.slice(-8)}
+                                            <option value="">Seleccionar sección...</option>
+                                            {sectionsAvailable.map(({ iId, inv, sId, sec }) => (
+                                                <option key={`${iId}-${sId}`} value={`${iId}::${sId}`}>
+                                                    {(inv.nombre || iId.slice(-8))} · {(sec.nombre || sId.slice(-8))}
                                                 </option>
                                             ))}
                                         </select>
@@ -560,7 +717,7 @@ export default function Vinculacion() {
                         {/* Botón enviar */}
                         <button
                             onClick={handleSend}
-                            disabled={usbSending || (!wifiReady && !ssid.trim()) || (wifiReady && !invId)}
+                            disabled={usbSending || (!wifiReady && !ssid.trim()) || (wifiReady && (!invId || !secId))}
                             className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20"
                         >
                             {usbSending ? (
@@ -582,7 +739,7 @@ export default function Vinculacion() {
                         </button>
 
                         <p className="text-xs text-center text-gray-400 dark:text-gray-500">
-                            Primero se envía el WiFi. Después, cuando el módulo responda con WiFi OK, puedes asignarle el invernadero para dejarlo vinculado.
+                            Primero se envía el WiFi. Después, cuando el módulo responda con WiFi OK, puedes asignarle la sección para dejarlo vinculado.
                         </p>
 
                         {esperandoReinicio && (
@@ -618,29 +775,17 @@ export default function Vinculacion() {
                                     const text = input.value.trim();
                                     if (!text) return;
                                     try {
-                                        // Si parece JSON, enviarlo tal cual; si no, envolverlo como comando
-                                        let payload;
-                                        if (text.startsWith("{")) {
-                                            payload = text;
-                                        } else {
-                                            payload = JSON.stringify({ command: text });
-                                        }
-                                        const { sendUsbCommand: sendRaw } = await import("../services/usbService");
-                                        // Escribir directamente al puerto
                                         if (!usbIsConnected()) {
                                             setGlobalStatus({ type: "error", msg: "No hay dispositivo USB conectado." });
                                             return;
                                         }
-                                        // Usar la función de escritura del servicio
-                                        const usbMod = await import("../services/usbService");
-                                        // Acceder a la función de escritura interna no es posible,
-                                        // así que usamos sendUsbCommand con el texto como command
+
                                         if (text.startsWith("{")) {
                                             // JSON directo — enviar como WiFi config o comando
                                             try {
                                                 const parsed = JSON.parse(text);
                                                 if (parsed.ssid) {
-                                                    await sendWiFiConfigUsb(parsed.ssid, parsed.password || "", parsed.invernaderoId || "", parsed.userId || "");
+                                                    await sendWiFiConfigUsb(parsed.ssid, parsed.password || "", parsed.invernaderoId || "", parsed.userId || "", parsed.seccionId || "");
                                                 } else if (parsed.command) {
                                                     await sendUsbCommand(parsed.command, parsed);
                                                 } else {
@@ -650,7 +795,14 @@ export default function Vinculacion() {
                                                 await sendUsbCommand(text);
                                             }
                                         } else {
-                                            await sendUsbCommand(text);
+                                            // Comando de texto plano (scan, status, etc.) — enviar directo sin envolver en JSON
+                                            if (text === "scan") {
+                                                await requestWiFiScanUsb();
+                                            } else if (text === "status") {
+                                                await requestDeviceStatusUsb();
+                                            } else {
+                                                await sendUsbCommand(text);
+                                            }
                                         }
                                         setSerialLogs((prev) => [...prev, `[TX] ${text}`].slice(-250));
                                         input.value = "";
@@ -684,7 +836,7 @@ export default function Vinculacion() {
                 <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-2xl overflow-hidden">
                         <div className="px-4 py-3 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
-                            <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Redes WiFi detectadas</h3>
+                            <h3 className="font-bold text-sm text-gray-800 dark:text-gray-100">Escaneo WiFi</h3>
                             <button
                                 type="button"
                                 onClick={() => setScanModalOpen(false)}
@@ -698,7 +850,7 @@ export default function Vinculacion() {
                                 <p className="text-sm text-gray-500">Escaneando redes, espera un momento...</p>
                             )}
                             {!usbScanLoading && scanResults.length === 0 && (
-                                <p className="text-sm text-gray-500">No se detectaron redes.</p>
+                                <p className="text-sm text-gray-500">{scanError || "No se detectaron redes."}</p>
                             )}
                             {scanResults.map((net, idx) => (
                                 <button
@@ -735,7 +887,7 @@ export default function Vinculacion() {
                     </h2>
 
                     <p className="text-xs text-gray-400">
-                        El módulo trabaja por fases: WiFi → Firebase → vínculo con invernadero.
+                        El módulo trabaja por fases: WiFi → Firebase → vínculo con sección.
                     </p>
 
                     {moduloEntries.length === 0 ? (
@@ -745,7 +897,7 @@ export default function Vinculacion() {
                             {moduloEntries.map(([mId, m]) => {
                                 const online = isModuleOnline(m);
                                 const loc    = locations[m.ip];
-                                const linked = !!m.invernaderoId;
+                                const linked = !!m.invernaderoId && !!m.seccionId;
                                 return (
                                     <div
                                         key={mId}
@@ -779,12 +931,13 @@ export default function Vinculacion() {
                         <p className="text-sm text-gray-400">Sin vínculos configurados.</p>
                     ) : (
                         <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                            {activeLinkings.map(({ invId: iId, invName, moduloId, modulo }) => {
+                            {activeLinkings.map(({ invId: iId, secId: sId, invName, secName, moduloId, modulo }) => {
                                 const online = isModuleOnline(modulo);
                                 return (
-                                    <div key={iId} className="flex items-center justify-between bg-white/30 dark:bg-slate-800/30 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3">
+                                    <div key={`${iId}-${sId}`} className="flex items-center justify-between bg-white/30 dark:bg-slate-800/30 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3">
                                         <div className="min-w-0 flex-1">
                                             <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{invName}</p>
+                                            <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">Sección: {secName}</p>
                                             <p className="text-[10px] font-mono text-gray-400 mt-0.5 truncate">{moduloId}</p>
                                             <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1 ${online ? "text-emerald-500" : "text-gray-400"}`}>
                                                 <span className={`w-1.5 h-1.5 rounded-full ${online ? "bg-emerald-500 animate-pulse" : "bg-gray-400"}`} />
@@ -793,7 +946,7 @@ export default function Vinculacion() {
                                             </span>
                                         </div>
                                         <button
-                                            onClick={() => handleUnlink(moduloId, iId)}
+                                            onClick={() => handleUnlink(moduloId, iId, sId)}
                                             disabled={unlinkingId === moduloId}
                                             className="ml-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl transition disabled:opacity-40 flex-shrink-0"
                                             title="Desvincular módulo"
@@ -819,7 +972,7 @@ export default function Vinculacion() {
                     <p>1. Conecta el módulo OASYS a esta laptop con un cable USB.</p>
                     <p>2. Presiona "Conectar módulo USB" y selecciona el puerto serial en el navegador.</p>
                             <p>3. Escribe el nombre y contraseña de tu red WiFi (2.4 GHz) y presiona "Conectar WiFi".</p>
-                            <p>4. Cuando aparezca WiFi OK, selecciona el invernadero y presiona "Vincular módulo".</p>
+                            <p>4. Cuando aparezca WiFi OK, selecciona la sección y presiona "Vincular módulo".</p>
                             <p>5. Una vez vinculado, puedes desconectar el cable. El módulo operará por WiFi de forma autónoma.</p>
                 </div>
             </div>
