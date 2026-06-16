@@ -174,7 +174,7 @@ function parseTextCommand(text) {
   };
 }
 
-   parseCommand(body) {
+  function parseCommand(body) {
   if (isAlexaRequest(body)) {
     const request = body.request;
     if (request?.type === "LaunchRequest") {
