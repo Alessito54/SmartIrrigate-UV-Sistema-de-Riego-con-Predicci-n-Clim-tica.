@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, memo } from "react";
 import { ref, onValue, set, get } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
+import { cerrarSesionRiego, getLitrosHora, iniciarSesionRiego } from "../services/riegoHistorial";
 import { WiRaindrop } from "react-icons/wi";
 import {
     FiAlertTriangle, FiShield, FiToggleLeft, FiToggleRight,
@@ -231,6 +232,7 @@ export default function ControlManual() {
     const [modal, setModal] = useState({ open: false, type: null, value: null });
     const [controlError, setControlError] = useState("");
     const [lastWriteInfo, setLastWriteInfo] = useState(null);
+    const litrosHora = getLitrosHora(currentSection);
 
     // Listeners en tiempo real
     useEffect(() => {
@@ -273,6 +275,11 @@ export default function ControlManual() {
                 const path = `${sectionPath}/control/riego`;
                 await set(ref(db, path), modal.value);
                 await verifyControlValue(path, modal.value, "riego");
+                if (modal.value) {
+                    await iniciarSesionRiego(sectionPath, { modo: "manual", tipo: "manual", litrosHora });
+                } else {
+                    await cerrarSesionRiego(sectionPath, { modo: "manual", tipo: "manual", litrosHora });
+                }
                 setLastWriteInfo({
                     path,
                     esperado: modal.value,
@@ -289,7 +296,7 @@ export default function ControlManual() {
                             status: "Firebase mantuvo el valor. La web sí está escribiendo bien.",
                         } : prev);
                     } catch (err) {
-                        setControlError(`${err.message}. Esto indica que otro cliente lo regresó, normalmente el ESP32 con firmware viejo o una ruta/automatización activa.`);
+                        setControlError(`${err.message}. Esto indica que otro cliente lo regresó, normalmente el OASYS con firmware viejo o una ruta/automatización activa.`);
                         setLastWriteInfo((prev) => prev?.path === path ? {
                             ...prev,
                             checkedAt: new Date().toLocaleTimeString("es-MX"),
@@ -308,7 +315,7 @@ export default function ControlManual() {
             setLoading(false);
             setModal({ open: false, type: null, value: null });
         }
-    }, [modal, sectionPath, verifyControlValue]);
+    }, [litrosHora, modal, sectionPath, verifyControlValue]);
 
     const modalConfig = modal.type ? controlItems[modal.type] : null;
     const modalMessage = modalConfig
@@ -356,6 +363,9 @@ export default function ControlManual() {
                     Activa o desactiva el modo automático, la bomba de agua y la malla sombra de este invernadero.
                     Cuando el modo automático está activo, los controles manuales se deshabilitan.
                 </p>
+                <p className="text-xs text-sky-600 dark:text-sky-400 mt-2">
+                    Bomba configurada: {litrosHora} L/h. El historial calcula litros al apagar el riego.
+                </p>
             </header>
 
             <div className="glass rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
@@ -390,9 +400,9 @@ export default function ControlManual() {
             {lastWriteInfo && (
                 <div className="px-4 py-3 rounded-2xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/20 text-xs text-sky-700 dark:text-sky-300 space-y-1">
                     <p className="font-bold">Diagnóstico Firebase</p>
-                    <p><span className="font-semibold">Ruta:</span> <span className="font-mono">{lastWriteInfo.path}</span></p>
-                    <p><span className="font-semibold">Esperado:</span> {String(lastWriteInfo.esperado)} · <span className="font-semibold">Actual leído:</span> {String(lastWriteInfo.riegoActual)}</p>
-                    <p><span className="font-semibold">Estado:</span> {lastWriteInfo.status} · {lastWriteInfo.checkedAt}</p>
+                    <p><span className="font-semibold">Ruta:</span><span className="font-mono">{lastWriteInfo.path}</span></p>
+                    <p><span className="font-semibold">Esperado:</span>{String(lastWriteInfo.esperado)} · <span className="font-semibold">Actual leído:</span>{String(lastWriteInfo.riegoActual)}</p>
+                    <p><span className="font-semibold">Estado:</span>{lastWriteInfo.status} · {lastWriteInfo.checkedAt}</p>
                 </div>
             )}
 
@@ -445,10 +455,10 @@ export default function ControlManual() {
                 <FiZap className="flex-shrink-0 mt-0.5" size={16} />
                 <div className="text-xs space-y-1">
                     <p><strong>¿Cómo funciona?</strong></p>
-                    <p>1. <strong>Modo automático</strong> — El ESP32 opera según los umbrales de sensores configurados en Automatización.</p>
-                    <p>2. <strong>Bomba de agua</strong> — Enciende o apaga el relé que controla la bomba de riego.</p>
-                    <p>3. <strong>Malla sombra</strong> — Abre o cierra el motor de la malla para proteger los cultivos.</p>
-                    <p className="opacity-70 mt-1">Los cambios se sincronizan en tiempo real con el módulo ESP32 vía Firebase.</p>
+                    <p>1. <strong>Modo automático</strong>— El OASYS opera según los umbrales de sensores configurados en Automatización.</p>
+                    <p>2. <strong>Bomba de agua</strong>— Enciende o apaga el relé que controla la bomba de riego.</p>
+                    <p>3. <strong>Malla sombra</strong>— Abre o cierra el motor de la malla para proteger los cultivos.</p>
+                    <p className="opacity-70 mt-1">Los cambios se sincronizan en tiempo real con el módulo OASYS vía Firebase.</p>
                 </div>
             </div>
         </div>

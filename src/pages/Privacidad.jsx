@@ -16,11 +16,11 @@ export default function Privacidad() {
             <LegalSection title="2. Información que recopilamos">
                 <p>Recopilamos los siguientes tipos de datos al usar {PROJECT_NAME}:</p>
                 <ul className="list-disc pl-5 space-y-1 mt-2">
-                    <li><strong>Datos de cuenta:</strong> nombre de usuario y correo electrónico (provistos al registrarse con Firebase Authentication).</li>
-                    <li><strong>Datos del módulo OASYS:</strong> dirección IP pública del módulo y marca de tiempo (timestamp) de actividad, guardados en Firebase Realtime Database sin autenticación del dispositivo.</li>
-                    <li><strong>Datos de sensores:</strong> temperatura, humedad relativa, radiación solar (UV) y velocidad del viento, asociados a las secciones de tu invernadero.</li>
-                    <li><strong>Datos de invernaderos y secciones:</strong> nombres, cultivos y configuraciones que tú mismo introduces.</li>
-                    <li><strong>Datos de geolocalización aproximada:</strong> ubicación estimada a partir de la IP pública (ciudad y país) mediante el servicio <code>ipapi.co</code>, usada únicamente para mostrar el pronóstico meteorológico local. No almacenamos esta información.</li>
+                    <li><strong>Datos de cuenta:</strong>nombre de usuario y correo electrónico (provistos al registrarse con Firebase Authentication).</li>
+                    <li><strong>Datos del módulo OASYS:</strong>dirección IP pública del módulo y marca de tiempo (timestamp) de actividad, guardados en Firebase Realtime Database sin autenticación del dispositivo.</li>
+                    <li><strong>Datos de sensores:</strong>temperatura, humedad relativa, radiación solar (UV) y velocidad del viento, asociados a las secciones de tu invernadero.</li>
+                    <li><strong>Datos de invernaderos y secciones:</strong>nombres, cultivos y configuraciones que tú mismo introduces.</li>
+                    <li><strong>Datos de geolocalización aproximada:</strong>ubicación estimada a partir de la IP pública (ciudad y país) mediante el servicio <code>ipapi.co</code>, usada únicamente para mostrar el pronóstico meteorológico local. No almacenamos esta información.</li>
                 </ul>
             </LegalSection>
 
@@ -37,7 +37,7 @@ export default function Privacidad() {
 
             <LegalSection title="4. Firebase y servicios de terceros">
                 <p>
-                    {PROJECT_NAME} utiliza <strong>Firebase Realtime Database</strong> y <strong>Firebase Authentication</strong> de Google LLC para el almacenamiento y autenticación en tiempo real.
+                    {PROJECT_NAME} utiliza <strong>Firebase Realtime Database</strong>y <strong>Firebase Authentication</strong> de Google LLC para el almacenamiento y autenticación en tiempo real.
                     Los datos se almacenan en servidores de Google Cloud bajo los términos de servicio de Firebase.
                 </p>
                 <p>
@@ -52,16 +52,16 @@ export default function Privacidad() {
             <LegalSection title="5. Seguridad de los datos">
                 <p>
                     Implementamos reglas de seguridad en Firebase Realtime Database que restringen el acceso a los datos de cada usuario únicamente a su propia cuenta autenticada.
-                    Los campos técnicos del módulo OASYS (<code>timestamp</code> e <code>ip</code>) son escribibles sin autenticación para permitir la telemetría del hardware, pero la lectura de estos datos requiere sesión activa.
+                    Los campos técnicos del módulo OASYS (<code>timestamp</code>e <code>ip</code>) son escribibles sin autenticación para permitir la telemetría del hardware, pero la lectura de estos datos requiere sesión activa.
                 </p>
             </LegalSection>
 
             <LegalSection title="6. Tus derechos">
                 <ul className="list-disc pl-5 space-y-1">
-                    <li><strong>Acceso:</strong> puedes consultar todos tus datos desde el dashboard de la aplicación.</li>
-                    <li><strong>Rectificación:</strong> puedes modificar tu nombre desde la sección de Ajustes.</li>
-                    <li><strong>Eliminación:</strong> puedes solicitar la eliminación de tu cuenta y datos escribiéndonos a <strong>{CONTACT_EMAIL}</strong>.</li>
-                    <li><strong>Portabilidad:</strong> puedes solicitar una exportación de tus datos por correo electrónico.</li>
+                    <li><strong>Acceso:</strong>puedes consultar todos tus datos desde el dashboard de la aplicación.</li>
+                    <li><strong>Rectificación:</strong>puedes modificar tu nombre desde la sección de Ajustes.</li>
+                    <li><strong>Eliminación:</strong>puedes solicitar la eliminación de tu cuenta y datos escribiéndonos a <strong>{CONTACT_EMAIL}</strong>.</li>
+                    <li><strong>Portabilidad:</strong>puedes solicitar una exportación de tus datos por correo electrónico.</li>
                 </ul>
             </LegalSection>
 

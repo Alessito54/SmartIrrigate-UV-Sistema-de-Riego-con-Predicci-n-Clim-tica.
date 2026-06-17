@@ -23,7 +23,7 @@ let _recoverCount = 0;
 let _lastStatus = null;
 
 const USB_BAUD_RATE = 115200;
-const ESP32_BOOT_DELAY_MS = 1800;
+const OASYS_BOOT_DELAY_MS = 1800;
 const USB_RECONNECT_GRACE_MS = 6000;
 const USB_WRITE_TIMEOUT_MS = 9000;
 const USB_RECOVERY_WINDOW_MS = 15000;
@@ -121,7 +121,7 @@ export async function sendWiFiConfigUsb(ssid, password, invernaderoId, userId, s
     console.log(`[USB] Config enviada: ${payload}`);
 
     // Mantener lectura activa para capturar estados posteriores (wifi_ok / vinculado)
-    // incluso si el ESP32 reinicia temporalmente el puerto.
+    // incluso si el OASYS reinicia temporalmente el puerto.
 }
 
 export async function requestWiFiScanUsb() {
@@ -200,7 +200,7 @@ async function _readLoop(callback) {
     if (_readLoopActive) return;
     _readLoopActive = true;
 
-    // Cada iteración del while recrea el stream para manejar reinicios del ESP32
+    // Cada iteración del while recrea el stream para manejar reinicios del OASYS
     try {
         while (_keepReading) {
             if (!_port) {
@@ -268,12 +268,12 @@ async function _readLoop(callback) {
 
                 if (isDeviceLost && _keepReading) {
                     if (!_canAttemptRecovery()) {
-                        console.warn("[USB] El ESP32 está reiniciando el puerto repetidamente. Deteniendo lectura.");
-                        callback({ type: "raw", line: "[USB] El ESP32 reinició demasiadas veces. Reconecta manualmente el módulo.", ts: Date.now() });
+                        console.warn("[USB] El OASYS está reiniciando el puerto repetidamente. Deteniendo lectura.");
+                        callback({ type: "raw", line: "[USB] El OASYS reinició demasiadas veces. Reconecta manualmente el módulo.", ts: Date.now() });
                         _stopReadingAndNotify();
                         continue;
                     }
-                    callback({ type: "raw", line: "[USB] ESP32 reinició el puerto, esperando reconexión...", ts: Date.now() });
+                    callback({ type: "raw", line: "[USB] OASYS reinició el puerto, esperando reconexión...", ts: Date.now() });
                     const recovered = await _recoverAfterDeviceLoss();
                     if (!recovered && _keepReading) {
                         console.warn("[USB] No se pudo recuperar el puerto USB.");
@@ -467,7 +467,7 @@ async function _settlePortAfterOpen() {
     try {
         await _port?.setSignals?.({ dataTerminalReady: false, requestToSend: false });
     } catch { /* setSignals no está disponible en todos los adaptadores */ }
-    await _delay(ESP32_BOOT_DELAY_MS);
+    await _delay(OASYS_BOOT_DELAY_MS);
 }
 
 function _canAttemptRecovery() {

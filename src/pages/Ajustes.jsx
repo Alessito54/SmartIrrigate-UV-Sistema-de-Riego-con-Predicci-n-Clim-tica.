@@ -74,9 +74,9 @@ export default function Ajustes() {
 
       {/* ═══ STATS ROW ═══ */}
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <StatCard emoji="🏠" label="Invernaderos" value={invEntries.length} colorClass="border-emerald-400/50" />
-        <StatCard emoji="🌱" label="Secciones" value={totalSecs} colorClass="border-sky-400/50" />
-        <StatCard emoji="📡" label={onlineModules === 1 ? "Módulo online" : "Módulos online"} value={onlineModules} colorClass="border-violet-400/50" />
+        <StatCard emoji="" label="Invernaderos" value={invEntries.length} colorClass="border-emerald-400/50" />
+        <StatCard emoji="" label="Secciones" value={totalSecs} colorClass="border-sky-400/50" />
+        <StatCard emoji="" label={onlineModules === 1 ? "Módulo online" : "Módulos online"} value={onlineModules} colorClass="border-violet-400/50" />
       </div>
 
       {/* ═══ PROFILE ═══ */}
@@ -131,7 +131,7 @@ export default function Ajustes() {
                   </button>
                   <button onClick={() => { setEditingName(false); setNombre(userData?.nombre || ""); }}
                     className="px-3 py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-500 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition text-sm">
-                    ✕
+                    Cerrar
                   </button>
                 </div>
               ) : (
@@ -162,7 +162,7 @@ export default function Ajustes() {
       {/* ═══ APPEARANCE ═══ */}
       <section className="glass rounded-3xl p-6 space-y-5">
         <h2 className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-          {darkMode ? <FiMoon className="text-violet-500" /> : <FiSun className="text-amber-500" />}
+          {darkMode ? <FiMoon className="text-violet-500" />: <FiSun className="text-amber-500" />}
           Apariencia
         </h2>
 
@@ -235,9 +235,9 @@ export default function Ajustes() {
 
         {invEntries.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 p-8 text-center space-y-2">
-            <p className="text-3xl">🏠</p>
+            <p className="text-3xl"></p>
             <p className="text-sm font-semibold text-gray-500 dark:text-gray-400">Sin invernaderos aún</p>
-            <p className="text-xs text-gray-400">Ve a <b>Invernaderos</b> para crear el primero.</p>
+            <p className="text-xs text-gray-400">Ve a <b>Invernaderos</b>para crear el primero.</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -255,7 +255,7 @@ export default function Ajustes() {
                   <div className={`flex items-center justify-between px-4 py-3 ${isActiveInv ? "bg-emerald-50/60 dark:bg-emerald-900/20" : "bg-white/50 dark:bg-slate-800/50"}`}>
                     <div className="flex items-center gap-2.5">
                       <div className={`w-7 h-7 rounded-xl flex items-center justify-center text-base ${isActiveInv ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-gray-100 dark:bg-slate-700"}`}>
-                        🏠
+                        
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-800 dark:text-gray-100 leading-none">
@@ -276,7 +276,7 @@ export default function Ajustes() {
                     </div>
                     {isActiveInv && (
                       <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-100 dark:bg-emerald-900/40 px-2 py-0.5 rounded-full">
-                        ✓ Activo
+                        Activo
                       </span>
                     )}
                   </div>
@@ -292,7 +292,7 @@ export default function Ajustes() {
                           className={`w-full flex items-center justify-between px-4 py-2.5 text-left transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 ${isActiveSec ? "bg-emerald-50/80 dark:bg-emerald-900/20" : ""}`}
                         >
                           <div className="flex items-center gap-2.5">
-                            <span className="text-base w-6 text-center">{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                            <span className="text-base w-6 text-center">{sec?.cultivoActual?.split(" ")[0] || ""}</span>
                             <div>
                               <p className={`text-sm leading-none ${isActiveSec ? "font-bold text-emerald-700 dark:text-emerald-400" : "text-gray-700 dark:text-gray-300"}`}>
                                 {sec?.nombre || sId}

@@ -3,7 +3,7 @@ import { PROJECT_NAME, CONTACT_EMAIL } from "../config";
 
 export default function DerechosAutor() {
     return (
-        <LegalLayout title="Derechos de Autor" icon="©" lastUpdated="28 de febrero de 2026">
+        <LegalLayout title="Derechos de Autor" icon="" lastUpdated="28 de febrero de 2026">
 
             <LegalSection title="1. Titularidad">
                 <p>
@@ -60,14 +60,14 @@ export default function DerechosAutor() {
                     cada una con su propia licencia:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 mt-2">
-                    <li><strong>React</strong> — MIT License (Meta Platforms, Inc.)</li>
-                    <li><strong>Vite</strong> — MIT License</li>
-                    <li><strong>Tailwind CSS</strong> — MIT License</li>
-                    <li><strong>Firebase SDK</strong> — Apache 2.0 License (Google LLC)</li>
-                    <li><strong>React Router</strong> — MIT License</li>
-                    <li><strong>react-icons</strong> — MIT License</li>
-                    <li><strong>Open-Meteo API</strong> — CC BY 4.0 (uso no comercial gratuito)</li>
-                    <li><strong>ipapi.co</strong> — Servicio de geolocalización por IP (uso bajo sus propios términos)</li>
+                    <li><strong>React</strong>— MIT License (Meta Platforms, Inc.)</li>
+                    <li><strong>Vite</strong>— MIT License</li>
+                    <li><strong>Tailwind CSS</strong>— MIT License</li>
+                    <li><strong>Firebase SDK</strong>— Apache 2.0 License (Google LLC)</li>
+                    <li><strong>React Router</strong>— MIT License</li>
+                    <li><strong>react-icons</strong>— MIT License</li>
+                    <li><strong>Open-Meteo API</strong>— CC BY 4.0 (uso no comercial gratuito)</li>
+                    <li><strong>ipapi.co</strong>— Servicio de geolocalización por IP (uso bajo sus propios términos)</li>
                 </ul>
                 <p className="mt-2">
                     El uso de estas bibliotecas no implica ninguna afiliación o respaldo por parte de sus autores.
@@ -80,7 +80,7 @@ export default function DerechosAutor() {
                 </p>
                 <ul className="list-disc pl-5 space-y-1 mt-2">
                     <li>Fotografías propias del equipo de desarrollo, todos los derechos reservados.</li>
-                    <li>Imágenes de <strong>Unsplash</strong> bajo la licencia Unsplash License (gratuita para uso comercial y no comercial).</li>
+                    <li>Imágenes de <strong>Unsplash</strong>bajo la licencia Unsplash License (gratuita para uso comercial y no comercial).</li>
                 </ul>
             </LegalSection>
 

@@ -7,7 +7,7 @@
  *   - Chrome 56+ / Edge 79+ / Android Chrome
  *   - HTTPS o localhost (Secure Context obligatorio)
  *
- * UUIDs deben coincidir exactamente con bluetooth_manager.h en el ESP32.
+ * UUIDs deben coincidir exactamente con bluetooth_manager.h en el OASYS.
  * ============================================================
  */
 
@@ -162,9 +162,9 @@ export async function sendWiFiConfig(ssid, password, invernaderoId, userId, secc
     await _charConfig.writeValueWithoutResponse(encoder.encode(payload));
 
     // Marcar como desconexion intencional AHORA que la config fue enviada.
-    // El ESP32 va a cortar BLE para conectar WiFi — no queremos que la app
+    // El OASYS va a cortar BLE para conectar WiFi — no queremos que la app
     // intente reconectar porque eso causa el loop infinito.
-    console.log("[BLE] Config enviada — esperando que ESP32 corte BLE para conectar WiFi");
+    console.log("[BLE] Config enviada — esperando que OASYS corte BLE para conectar WiFi");
     _intentionalDisconnect = true;
 }
 

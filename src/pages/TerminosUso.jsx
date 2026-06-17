@@ -77,7 +77,7 @@ export default function TerminosUso() {
 
             <LegalSection title="7. Limitación de responsabilidad">
                 <p>
-                    {PROJECT_NAME} se proporciona <strong>"tal cual"</strong> y <strong>"según disponibilidad"</strong>.
+                    {PROJECT_NAME} se proporciona <strong>"tal cual"</strong>y <strong>"según disponibilidad"</strong>.
                     En ningún caso seremos responsables por:
                 </p>
                 <ul className="list-disc pl-5 space-y-1 mt-2">

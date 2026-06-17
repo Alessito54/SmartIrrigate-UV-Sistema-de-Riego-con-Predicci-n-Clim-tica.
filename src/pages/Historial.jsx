@@ -22,8 +22,18 @@ function fmtDuracion(seg) {
 }
 
 function fmtFecha(iso) {
-  const d = new Date(iso);
+  const d = new Date(iso || Date.now());
   return d.toLocaleString("es-MX", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+}
+
+function getRiegoTimestamp(item) {
+  const raw = item?.fin ?? item?.finTs ?? item?.creadoEn ?? item?.inicio ?? item?.inicioTs;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 export default function Historial() {
@@ -34,6 +44,7 @@ export default function Historial() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("todos");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState(null);
   const [showSectionPicker, setShowSectionPicker] = useState(false);
 
   // ─── All invernaderos totals (aggregate) ─────────────────────────────
@@ -76,7 +87,7 @@ export default function Historial() {
       const val = snap.val() || {};
       const arr = Object.entries(val)
         .map(([key, v]) => ({ key, ...v }))
-        .sort((a, b) => new Date(b.inicio) - new Date(a.inicio));
+        .sort((a, b) => getRiegoTimestamp(b) - getRiegoTimestamp(a));
       setItems(arr);
       setLoading(false);
     });
@@ -86,7 +97,7 @@ export default function Historial() {
   // ─── Filter ───────────────────────────────────────────────────────────
   const ahora = new Date();
   const filtered = items.filter((i) => {
-    const d = new Date(i.inicio);
+    const d = new Date(getRiegoTimestamp(i));
     if (filter === "hoy") return d.toDateString() === ahora.toDateString();
     if (filter === "semana") return (ahora - d) < 7 * 24 * 60 * 60 * 1000;
     return true;
@@ -100,6 +111,12 @@ export default function Historial() {
     if (!sectionPath) return;
     await remove(ref(db, `${sectionPath}/historial_riego`));
     setConfirmDelete(false);
+  }
+
+  async function eliminarRiego(itemKey) {
+    if (!sectionPath || !itemKey) return;
+    await remove(ref(db, `${sectionPath}/historial_riego/${itemKey}`));
+    setConfirmDeleteItem(null);
   }
 
   // Flat list of all sections for picker
@@ -128,17 +145,30 @@ export default function Historial() {
       {/* Confirm delete */}
       {confirmDelete && (
         <div className="glass rounded-2xl p-5 border border-red-200 dark:border-red-800/40 flex items-center justify-between gap-4 animate-fadeUp">
-          <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">⚠️ ¿Borrar todo el historial de esta sección?</p>
+          <p className="text-sm text-gray-700 dark:text-gray-200 font-medium">¿Borrar todo el historial de esta sección?</p>
           <div className="flex gap-2 flex-shrink-0">
             <button onClick={limpiarHistorial} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-500 transition">Sí, borrar</button>
-            <button onClick={() => setConfirmDelete(false)} className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 text-sm font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition">Cancelar</button>
+            <button onClick={() =>setConfirmDelete(false)} className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 text-sm font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteItem && (
+        <div className="glass rounded-2xl p-5 border border-red-200 dark:border-red-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeUp">
+          <div>
+            <p className="text-sm text-gray-700 dark:text-gray-200 font-bold">¿Borrar este riego?</p>
+            <p className="text-xs text-gray-400 mt-1">Solo se eliminará este registro del historial.</p>
+          </div>
+          <div className="flex gap-2 flex-shrink-0">
+            <button onClick={() => eliminarRiego(confirmDeleteItem)} className="px-4 py-2 bg-red-600 text-white text-sm font-bold rounded-xl hover:bg-red-500 transition">Borrar riego</button>
+            <button onClick={() => setConfirmDeleteItem(null)} className="px-4 py-2 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-300 text-sm font-bold rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition">Cancelar</button>
           </div>
         </div>
       )}
 
       {/* ─── GLOBAL TOTALS (all invernaderos) ─── */}
       <div className="glass rounded-3xl p-6">
-        <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">📊 Total general — todos los invernaderos</h2>
+        <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-4">Total general — todos los invernaderos</h2>
         <div className="grid grid-cols-3 gap-4">
           {[
             { label: "Riegos totales", value: globalStats.riegos, unit: "", icon: FiBarChart2, color: "text-emerald-600 dark:text-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-900/20" },
@@ -167,7 +197,7 @@ export default function Historial() {
         >
           {invId && secId ? (
             <div className="flex items-center gap-3">
-              <span className="text-xl">{invernaderos?.[invId]?.secciones?.[secId]?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+              <span className="text-xl">{invernaderos?.[invId]?.secciones?.[secId]?.cultivoActual?.split(" ")[0] || ""}</span>
               <div>
                 <p className="font-bold text-gray-800 dark:text-gray-100 text-sm">{currentSecName}</p>
                 <p className="text-xs text-gray-400">{currentInvName}</p>
@@ -187,7 +217,7 @@ export default function Historial() {
                 <div key={iId}>
                   <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${inv?.estado?.online ? "bg-emerald-400" : "bg-gray-400"}`} />
-                    🏠 {inv?.nombre || iId.slice(-8)}
+                     {inv?.nombre || iId.slice(-8)}
                   </div>
                   {secs.map(([sId, sec]) => (
                     <button
@@ -195,9 +225,9 @@ export default function Historial() {
                       onClick={() => { selectInvernadero(iId); selectSeccion(sId); setShowSectionPicker(false); }}
                       className={`w-full text-left px-6 py-2.5 text-sm transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2 ${invId === iId && secId === sId ? "text-emerald-600 font-bold bg-emerald-50/50 dark:bg-emerald-900/10" : "text-gray-700 dark:text-gray-300"}`}
                     >
-                      <span>{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                      <span>{sec?.cultivoActual?.split(" ")[0] || ""}</span>
                       {sec?.nombre || sId}
-                      {invId === iId && secId === sId && <span className="ml-auto text-[10px] font-bold text-emerald-500">✓ Activa</span>}
+                      {invId === iId && secId === sId && <span className="ml-auto text-[10px] font-bold text-emerald-500">Activa</span>}
                     </button>
                   ))}
                 </div>
@@ -250,18 +280,18 @@ export default function Historial() {
       {/* ─── EVENTS LIST ─── */}
       {!sectionPath && (
         <div className="glass rounded-3xl p-12 text-center space-y-3">
-          <div className="text-5xl">🏠</div>
+          <div className="text-5xl"></div>
           <p className="text-gray-500 font-medium">Selecciona un invernadero y sección arriba para ver su historial.</p>
         </div>
       )}
 
       {sectionPath && (
         <div className="space-y-3">
-          {loading && [1, 2, 3].map((i) => <div key={i} className="glass rounded-2xl h-20 animate-pulse" />)}
+          {loading && [1, 2, 3].map((i) =><div key={i} className="glass rounded-2xl h-20 animate-pulse" />)}
 
           {!loading && filtered.length === 0 && (
             <div className="glass rounded-3xl p-12 text-center space-y-2">
-              <div className="text-4xl">💧</div>
+              <div className="text-4xl"></div>
               <p className="text-gray-500 font-medium">Sin registros en este período.</p>
               <p className="text-xs text-gray-400">Los riegos aparecerán aquí automáticamente.</p>
             </div>
@@ -275,20 +305,30 @@ export default function Historial() {
                     <FiDroplet className="text-sky-500" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{fmtFecha(item.inicio)}</p>
-                    {item.fin && <p className="text-[11px] text-gray-400">Fin: {fmtFecha(item.fin)}</p>}
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{fmtFecha(item.inicio || item.inicioTs || item.creadoEn || item.finTs)}</p>
+                    {(item.fin || item.finTs) && <p className="text-[11px] text-gray-400">Fin: {fmtFecha(item.fin || item.finTs)}</p>}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-lg font-extrabold text-sky-600 dark:text-sky-400">{(item.litros || 0).toFixed(2)} L</p>
-                  <p className="text-xs text-gray-400">{fmtDuracion(item.duracion_seg || 0)}</p>
+                <div className="flex items-start gap-3 flex-shrink-0">
+                  <div className="text-right">
+                    <p className="text-lg font-extrabold text-sky-600 dark:text-sky-400">{(item.litros || 0).toFixed(2)} L</p>
+                    <p className="text-xs text-gray-400">{fmtDuracion(item.duracion_seg || 0)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteItem(item.key)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-xl text-red-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
+                    title="Borrar este riego"
+                  >
+                    <FiTrash2 size={14} />
+                  </button>
                 </div>
               </div>
               <MiniBar value={item.litros || 0} max={maxLitros} color="bg-sky-400" />
               {item.modo && (
                 <div className="mt-2">
                   <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${item.modo === "automatico" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-400" : "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400"}`}>
-                    {item.modo === "automatico" ? "⚡ Automático" : "👆 Manual"}
+                    {item.modo === "automatico" ? " Automático" : " Manual"}
                   </span>
                 </div>
               )}

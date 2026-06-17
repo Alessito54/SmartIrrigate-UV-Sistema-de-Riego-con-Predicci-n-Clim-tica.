@@ -36,6 +36,18 @@
                             ".read": true,
                             ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
                         },
+                        "configuracionBomba": {
+                            ".read": true,
+                            ".write": "auth !== null && root.child('usuarios/' + auth.uid + '/invernaderos/' + $invId).exists()"
+                        },
+                        "estadoRiego": {
+                            ".read": true,
+                            ".write": true
+                        },
+                        "historial_riego": {
+                            ".read": true,
+                            ".write": true
+                        },
                         "sensores": {
                             ".read": true,
                             ".write": true

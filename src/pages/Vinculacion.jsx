@@ -28,7 +28,7 @@ import {
     FiCpu, FiMinusCircle, FiZap, FiInfo
 } from "react-icons/fi";
 
-// ── Labels de estado del ESP32 ────────────────────────────────────────────────
+// ── Labels de estado del OASYS ────────────────────────────────────────────────
 const STATUS_LABELS = {
     idle:       "Conectado — listo para configurar",
     connecting: "Conectando al WiFi...",
@@ -169,7 +169,7 @@ export default function Vinculacion() {
     async function handleUsbStatus(st) {
         if (st?.type === "raw") {
             setSerialLogs((prev) => {
-                const next = [...prev, `[ESP32] ${st.line}`];
+                const next = [...prev, `[OASYS] ${st.line}`];
                 return next.slice(-250);
             });
             const parsedRaw = parseJsonFromSerialLine(st.line);
@@ -178,7 +178,7 @@ export default function Vinculacion() {
             }
             if (scanInFlightRef.current && st.line.includes("Recibido (no-JSON)")) {
                 setUsbScanLoading(false);
-                setScanError("El ESP32 recibió el comando, pero el firmware no reconoce el escaneo. Flashea el firmware actualizado.");
+                setScanError("El OASYS recibió el comando, pero el firmware no reconoce el escaneo. Flashea el firmware actualizado.");
             }
             return;
         }
@@ -268,7 +268,7 @@ export default function Vinculacion() {
                 setUsbPanel(false);
                 setUsbScanLoading(false);
                 if (!usbSending && !esperandoReinicio) {
-                    setGlobalStatus({ type: "info", msg: "El ESP32 reinició el puerto USB. Presiona de nuevo “Conectar módulo USB” y luego escanea redes." });
+                    setGlobalStatus({ type: "info", msg: "El OASYS reinició el puerto USB. Presiona de nuevo “Conectar módulo USB” y luego escanea redes." });
                 }
             };
 
@@ -296,7 +296,7 @@ export default function Vinculacion() {
                 scanInFlightRef.current = false;
                 scanStartedRef.current = false;
                 setUsbScanLoading(false);
-                setScanError(`El ESP32 se reinició durante el escaneo WiFi (${formatResetReason(st.resetReason)}). Prueba otro cable/puerto USB o escribe el SSID manualmente para continuar.`);
+                setScanError(`El OASYS se reinició durante el escaneo WiFi (${formatResetReason(st.resetReason)}). Prueba otro cable/puerto USB o escribe el SSID manualmente para continuar.`);
                 setScanModalOpen(true);
             }
             return;
@@ -322,9 +322,9 @@ export default function Vinculacion() {
             );
             setScanResults(networks);
             if (st.error) {
-                setScanError(`Error del ESP32: ${st.error}${st.code !== undefined ? ` (${st.code})` : ""}`);
+                setScanError(`Error del OASYS: ${st.error}${st.code !== undefined ? ` (${st.code})` : ""}`);
             } else if (st.count === 0) {
-                setScanError("El ESP32 respondió, pero no encontró redes 2.4 GHz cercanas.");
+                setScanError("El OASYS respondió, pero no encontró redes 2.4 GHz cercanas.");
             } else {
                 setScanError("");
             }
@@ -349,7 +349,7 @@ export default function Vinculacion() {
         setScanModalOpen(false);
     }
 
-    // ── Enviar configuración al ESP32 ─────────────────────────────────────────
+    // ── Enviar configuración al OASYS ─────────────────────────────────────────
     async function handleSend() {
         setUsbSending(true);
         setUsbStatus(null);
@@ -489,7 +489,7 @@ export default function Vinculacion() {
                             Configurar módulo nuevo
                         </h2>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                            Primero configura WiFi. Cuando el ESP32 confirme WiFi OK, se habilita la vinculación a una sección.
+                            Primero configura WiFi. Cuando el OASYS confirme WiFi OK, se habilita la vinculación a una sección.
                         </p>
                     </div>
 
@@ -607,7 +607,7 @@ export default function Vinculacion() {
                                                 className="w-full pl-9 pr-4 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
                                             />
                                         </div>
-                                        {/* Botón para escanear redes vía ESP32 */}
+                                        {/* Botón para escanear redes vía OASYS */}
                                         <div className="mt-2 flex items-center gap-3">
                                             <button
                                                 type="button"
@@ -630,7 +630,7 @@ export default function Vinculacion() {
                                                             scanInFlightRef.current = false;
                                                             scanStartedRef.current = false;
                                                             setUsbScanLoading(false);
-                                                            setScanError("Sin respuesta del ESP32. Revisa que el firmware nuevo esté flasheado y que el puerto no esté ocupado.");
+                                                            setScanError("Sin respuesta del OASYS. Revisa que el firmware nuevo esté flasheado y que el puerto no esté ocupado.");
                                                         }, 70000);
                                                     }
                                                 }}
@@ -664,7 +664,7 @@ export default function Vinculacion() {
                                                 onClick={() => setShowPw((v) => !v)}
                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
                                             >
-                                                {showPw ? <FiEye size={15} /> : <FiEyeOff size={15} />}
+                                                {showPw ? <FiEye size={15} />: <FiEyeOff size={15} />}
                                             </button>
                                         </div>
                                     </div>
@@ -684,7 +684,7 @@ export default function Vinculacion() {
                                 </label>
                                 {!wifiReady ? (
                                     <div className="mt-1.5 px-4 py-3 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 text-xs text-amber-700 dark:text-amber-300">
-                                        Primero conecta WiFi. Cuando el ESP32 responda con <strong>WiFi OK</strong>, podrás asignar la sección.
+                                        Primero conecta WiFi. Cuando el OASYS responda con <strong>WiFi OK</strong>, podrás asignar la sección.
                                     </div>
                                 ) : sectionsAvailable.length === 0 ? (
                                     <p className="mt-1.5 text-xs text-amber-500 italic">
@@ -745,13 +745,13 @@ export default function Vinculacion() {
                         {esperandoReinicio && (
                             <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-sky-50 dark:bg-sky-900/20 border border-sky-200 dark:border-sky-800 text-xs text-sky-700 dark:text-sky-300">
                                 <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />
-                                Esperando reinicio del ESP32 y confirmación de WiFi...
+                                Esperando reinicio del OASYS y confirmación de WiFi...
                             </div>
                         )}
 
                         <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
                             <div className="px-3 py-2 bg-gray-100 dark:bg-slate-900/70 text-xs font-semibold text-gray-600 dark:text-gray-300 flex items-center justify-between">
-                                <span>Monitor Serial ESP32</span>
+                                <span>Monitor Serial OASYS</span>
                                 <button
                                     type="button"
                                     onClick={() => setSerialLogs([])}
@@ -762,12 +762,12 @@ export default function Vinculacion() {
                             </div>
                             <div ref={serialLogRef} className="max-h-48 overflow-auto bg-black/90 text-emerald-300 font-mono text-[11px] p-3 space-y-1 scroll-smooth">
                                 {serialLogs.length === 0 ? (
-                                    <p className="text-emerald-500/70">Esperando mensajes del ESP32...</p>
+                                    <p className="text-emerald-500/70">Esperando mensajes del OASYS...</p>
                                 ) : (
-                                    serialLogs.map((line, idx) => <p key={`${idx}-${line.slice(0, 24)}`}>{line}</p>)
+                                    serialLogs.map((line, idx) =><p key={`${idx}-${line.slice(0, 24)}`}>{line}</p>)
                                 )}
                             </div>
-                            {/* ── Input interactivo para enviar comandos al ESP32 ── */}
+                            {/* ── Input interactivo para enviar comandos al OASYS ── */}
                             <form
                                 onSubmit={async (e) => {
                                     e.preventDefault();
@@ -887,7 +887,7 @@ export default function Vinculacion() {
                     </h2>
 
                     <p className="text-xs text-gray-400">
-                        El módulo trabaja por fases: WiFi → Firebase → vínculo con sección.
+                        El módulo trabaja por fases: WiFi, Firebase y vínculo con sección.
                     </p>
 
                     {moduloEntries.length === 0 ? (

@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { obtenerPronostico } from "../services/weather";
 import { generarPrediccionIA } from "../services/iaLocal";
 import { isModuleOnline, getModuloLocation } from "../services/modulos";
+import { getLitrosHora } from "../services/riegoHistorial";
 
 import {
   WiHumidity,
@@ -17,7 +18,7 @@ import {
   WiDayCloudy,
   WiNightClear
 } from "react-icons/wi";
-import { FiClock, FiPlus, FiTrash2, FiWifi, FiShield, FiChevronDown } from "react-icons/fi";
+import { FiBarChart2, FiClock, FiPlus, FiTrash2, FiWifi, FiShield, FiChevronDown } from "react-icons/fi";
 import { IoSparklesOutline } from "react-icons/io5";
 
 // ─── Constants ────────────────────────────────────────────────────────
@@ -544,68 +545,238 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
   );
 });
 
-// ─── OASYS offline placeholder ────────────────────────────────────────
+function getRiegoTimestamp(item) {
+  const raw = item?.fin ?? item?.finTs ?? item?.creadoEn ?? item?.inicio ?? item?.inicioTs;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
 
-const OASYSOfflinePanel = memo(function OASYSOfflinePanel({ moduloId, moduleOnline }) {
-  const title = !moduloId
-    ? "Sin módulo activo"
-    : moduleOnline
-      ? "Módulo online"
-      : "Sin conexión";
-  const detail = !moduloId
-    ? "Vincula un ESP32 a este invernadero"
-    : moduleOnline
-      ? "Conectado; clima por ubicación no disponible"
-      : "Esperando heartbeat del ESP32";
+function sameDay(a, b) {
+  return a.getFullYear() === b.getFullYear()
+    && a.getMonth() === b.getMonth()
+    && a.getDate() === b.getDate();
+}
+
+function buildWaterBars(items, period) {
+  const now = new Date();
+  const buckets = period === "dia"
+    ? Array.from({ length: 24 }, (_, i) => ({ label: `${String(i).padStart(2, "0")}:00`, litros: 0 }))
+    : period === "mes"
+      ? Array.from({ length: new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() }, (_, i) => ({ label: String(i + 1), litros: 0 }))
+      : Array.from({ length: 12 }, (_, i) => ({ label: new Date(now.getFullYear(), i, 1).toLocaleString("es-MX", { month: "short" }), litros: 0 }));
+
+  items.forEach((item) => {
+    const ts = getRiegoTimestamp(item);
+    if (!ts) return;
+    const d = new Date(ts);
+    if (period === "dia" && sameDay(d, now)) buckets[d.getHours()].litros += Number(item.litros) || 0;
+    if (period === "mes" && d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()) {
+      buckets[d.getDate() - 1].litros += Number(item.litros) || 0;
+    }
+    if (period === "anio" && d.getFullYear() === now.getFullYear()) {
+      buckets[d.getMonth()].litros += Number(item.litros) || 0;
+    }
+  });
+
+  return buckets.map((bucket) => ({ ...bucket, litros: Number(bucket.litros.toFixed(2)) }));
+}
+
+const WaterConsumptionChart = memo(function WaterConsumptionChart({ items, period, onPeriodChange, litrosHora }) {
+  const bars = useMemo(() => buildWaterBars(items, period), [items, period]);
+  const rawMax = Math.max(...bars.map((item) => item.litros), 0);
+  const max = Math.max(Math.ceil(rawMax), 1);
+  const total = bars.reduce((acc, item) => acc + item.litros, 0);
+  const activeBars = bars.filter((item) => item.litros > 0).length;
+  const average = activeBars > 0 ? total / activeBars : 0;
+  const riegos = items.filter((item) => {
+    const ts = getRiegoTimestamp(item);
+    if (!ts) return false;
+    const d = new Date(ts);
+    const now = new Date();
+    if (period === "dia") return sameDay(d, now);
+    if (period === "mes") return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    return d.getFullYear() === now.getFullYear();
+  }).length;
+  const periodInfo = {
+    dia: {
+      label: "Día",
+      title: "Consumo de hoy por hora",
+      subtitle: new Date().toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long" }),
+      xLabel: "Horas del día",
+      unitLabel: "L/hora",
+    },
+    mes: {
+      label: "Mes",
+      title: "Consumo del mes por día",
+      subtitle: new Date().toLocaleDateString("es-MX", { month: "long", year: "numeric" }),
+      xLabel: "Días del mes",
+      unitLabel: "L/día",
+    },
+    anio: {
+      label: "Año",
+      title: "Consumo anual por mes",
+      subtitle: String(new Date().getFullYear()),
+      xLabel: "Meses",
+      unitLabel: "L/mes",
+    },
+  }[period];
+  const yTicks = [max, max * 0.75, max * 0.5, max * 0.25, 0];
+  const hasData = bars.some((item) => item.litros > 0);
 
   return (
-    <div className="relative rounded-3xl overflow-hidden shadow-lg">
-      {/* Blurred skeleton underneath */}
-      <div className="blur-sm saturate-50 pointer-events-none select-none">
-        <div className="glass rounded-3xl p-6 sm:p-8 animate-pulse">
-          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-            <div className="flex items-center gap-4">
-              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gray-200/60 dark:bg-gray-700/40" />
-              <div className="space-y-2.5">
-                <div className="w-44 h-5 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
-                <div className="w-32 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
-                <div className="w-48 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
-              </div>
+    <section className="glass rounded-3xl p-5 sm:p-6 border border-sky-100/70 dark:border-sky-900/30">
+      <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-2xl bg-sky-50 dark:bg-sky-900/30 flex items-center justify-center">
+              <FiBarChart2 className="text-sky-500" />
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
-              {Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="space-y-1.5">
-                  <div className="w-20 h-3 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
-                  <div className="w-14 h-4 rounded-full bg-gray-200/60 dark:bg-gray-700/40" />
-                </div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-gray-50 tracking-tight">
+                Consumo de agua
+              </h2>
+              <p className="text-xs font-semibold text-sky-600 dark:text-sky-400 capitalize">
+                {periodInfo.title}
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+            {periodInfo.subtitle} · bomba configurada a {litrosHora} L/h
+          </p>
+        </div>
+        <div className="flex gap-1.5 bg-gray-100 dark:bg-slate-800/60 rounded-2xl p-1 w-fit">
+          {[
+            { key: "dia", label: "Día" },
+            { key: "mes", label: "Mes" },
+            { key: "anio", label: "Año" },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => onPeriodChange(key)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${period === key ? "bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow" : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div className="rounded-2xl bg-sky-50 dark:bg-sky-900/20 border border-sky-100 dark:border-sky-800/40 px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-500">Agua estimada</p>
+          <p className="text-2xl font-extrabold text-sky-700 dark:text-sky-300 mt-1">
+            {total.toFixed(1)} <span className="text-sm font-semibold text-sky-400">L</span>
+          </p>
+        </div>
+        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800/40 px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-500">Riegos</p>
+          <p className="text-2xl font-extrabold text-emerald-700 dark:text-emerald-300 mt-1">{riegos}</p>
+        </div>
+        <div className="rounded-2xl bg-violet-50 dark:bg-violet-900/20 border border-violet-100 dark:border-violet-800/40 px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-violet-500">Promedio activo</p>
+          <p className="text-2xl font-extrabold text-violet-700 dark:text-violet-300 mt-1">
+            {average.toFixed(1)} <span className="text-sm font-semibold text-violet-400">L</span>
+          </p>
+        </div>
+        <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700/60 px-4 py-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Escala</p>
+          <p className="text-2xl font-extrabold text-gray-800 dark:text-gray-100 mt-1">
+            {max.toFixed(0)} <span className="text-sm font-semibold text-gray-400">L máx.</span>
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-gray-100 dark:border-slate-800 bg-white/45 dark:bg-slate-900/30 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-xs font-bold text-gray-700 dark:text-gray-200">{periodInfo.unitLabel}</p>
+            <p className="text-[11px] text-gray-400">{periodInfo.xLabel}</p>
+          </div>
+          <p className="text-[11px] font-semibold text-gray-400">Litros aproximados</p>
+        </div>
+
+        <div className="grid grid-cols-[42px_minmax(0,1fr)] gap-3">
+          <div className="h-64 flex flex-col justify-between text-right pr-1">
+            {yTicks.map((tick, index) => (
+              <span key={index} className="text-[10px] font-semibold text-gray-400">
+                {tick.toFixed(tick >= 10 ? 0 : 1)}
+              </span>
+            ))}
+          </div>
+
+          <div className="relative min-w-0">
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+              {yTicks.map((_, index) => (
+                <span key={index} className="block border-t border-dashed border-gray-200/80 dark:border-slate-700/70" />
               ))}
+            </div>
+
+            <div className="relative overflow-x-auto pb-1">
+              <div className="h-64 flex items-end gap-1.5 sm:gap-2 min-w-max">
+                {bars.map((item, index) => {
+                  const height = item.litros > 0 ? Math.max(8, (item.litros / max) * 100) : 0;
+                  return (
+                    <div key={`${item.label}-${index}`} className="relative h-full min-w-[24px] sm:min-w-[28px] flex items-end group">
+                        <div
+                          className={`w-full rounded-t-xl transition-all duration-500 ${item.litros > 0
+                            ? "bg-gradient-to-t from-sky-600 via-sky-400 to-cyan-300 shadow-[0_10px_24px_rgba(14,165,233,0.22)]"
+                            : "bg-gray-200/60 dark:bg-slate-700/60"
+                          }`}
+                          style={{ height: `${height}%` }}
+                        />
+                        <div className="pointer-events-none absolute left-1/2 bottom-[calc(100%+8px)] z-20 -translate-x-1/2 rounded-xl bg-slate-950 text-white px-2.5 py-1.5 text-[11px] font-semibold opacity-0 shadow-xl transition group-hover:opacity-100 whitespace-nowrap">
+                          {item.label}: {item.litros.toFixed(2)} L
+                        </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex gap-1.5 sm:gap-2 min-w-max border-t border-gray-100 dark:border-slate-800 pt-2">
+                {bars.map((item, index) => {
+                  const showLabel = period === "dia" ? index % 3 === 0 : period === "mes" ? index % 3 === 0 : true;
+                  return (
+                    <div key={`label-${item.label}-${index}`} className="min-w-[24px] sm:min-w-[28px] text-center">
+                      <span className={`block text-[10px] leading-none text-gray-400 ${showLabel ? "" : "opacity-0"}`}>
+                        {item.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
       </div>
-      {/* Overlay message */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 z-10">
-        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl px-8 py-5 text-center shadow-2xl border border-gray-200/50 dark:border-slate-700/50">
-          <p className="text-3xl mb-2">📡</p>
-          <p className="text-sm font-bold text-gray-700 dark:text-gray-300">OASYS Módulo Climático</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{title}</p>
-          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{detail}</p>
+
+      {!hasData && (
+        <div className="mt-4 rounded-2xl border border-dashed border-sky-200 dark:border-sky-800/50 bg-sky-50/50 dark:bg-sky-900/10 px-4 py-4 text-center">
+          <p className="text-sm font-bold text-gray-700 dark:text-gray-200">Sin consumo registrado en este periodo</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+            Enciende y apaga la bomba para crear un evento de historial y calcular litros aproximados.
+          </p>
         </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 });
 
 // ─── Main Component ───────────────────────────────────────────────────
 
 export default function Dashboard() {
-  const { sectionPath, invPath, invId, secId, invernaderos, selectInvernadero, selectSeccion, modulos } = useAuth();
+  const { sectionPath, invPath, invId, secId, currentSection, invernaderos, selectInvernadero, selectSeccion, modulos } = useAuth();
   const navigate = useNavigate();
   const [sensores, setSensores] = useState(null);
   const [riego, setRiego] = useState(null);
+  const [riegoFisico, setRiegoFisico] = useState(false);
   const [malla, setMalla] = useState(null);
   const [automatico, setAutomatico] = useState(false);
   const [riegoProgramado, setRiegoProgramado] = useState({});
+  const [historialRiego, setHistorialRiego] = useState([]);
+  const [waterPeriod, setWaterPeriod] = useState("dia");
   const [scheduleTime, setScheduleTime] = useState("06:00");
   const [scheduleDuration, setScheduleDuration] = useState(10);
   const [scheduleType, setScheduleType] = useState("goteo");
@@ -624,6 +795,8 @@ export default function Dashboard() {
     : null;
   const moduloData = moduloId ? modulos[moduloId] : null;
   const moduleOnline = isModuleOnline(moduloData);
+  const litrosHora = getLitrosHora(currentSection);
+  const riegoActivo = riegoFisico || riego;
 
   // Firebase listeners
   useEffect(() => {
@@ -637,14 +810,22 @@ export default function Dashboard() {
         setSensores(s.val() || null);
       }),
       onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val() === true)),
+      onValue(ref(db, `${sectionPath}/estadoRiego/activo`), (s) => setRiegoFisico(s.val() === true)),
       onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val() === true)),
       onValue(ref(db, `${sectionPath}/controlAutomatico/activo`), (s) => setAutomatico(s.val() === true)),
       onValue(ref(db, `${sectionPath}/controlAutomatico/programaciones/riego`), (s) => setRiegoProgramado(s.val() || {})),
+      onValue(ref(db, `${sectionPath}/historial_riego`), (s) => {
+        const val = s.val() || {};
+        const rows = Object.entries(val)
+          .map(([id, item]) => ({ id, ...item }))
+          .sort((a, b) => getRiegoTimestamp(a) - getRiegoTimestamp(b));
+        setHistorialRiego(rows);
+      }),
     ];
     return () => unsubs.forEach((unsub) => unsub());
   }, [sectionPath, invPath]);
 
-  // Geolocation → weather
+  // Geolocation to weather
   useEffect(() => {
     let cancelled = false;
 
@@ -718,11 +899,11 @@ export default function Dashboard() {
     if (!clima || !sensores) return;
 
     const timer = setTimeout(() => {
-      generarPrediccionIA(clima, sensores, riego, malla).then(setIa);
+      generarPrediccionIA(clima, sensores, riegoActivo, malla).then(setIa);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [clima, sensores, riego, malla]);
+  }, [clima, sensores, riegoActivo, malla]);
 
   const formattedDate = useMemo(
     () =>
@@ -778,10 +959,12 @@ export default function Dashboard() {
       hora: scheduleTime,
       duracionMin,
       tipo: scheduleType,
+      litrosHora,
+      litrosEstimados: Number(((litrosHora / 60) * duracionMin).toFixed(2)),
       activo: true,
       creadoEn: Date.now(),
     });
-  }, [sectionPath, scheduleTime, scheduleDuration, scheduleType]);
+  }, [litrosHora, sectionPath, scheduleTime, scheduleDuration, scheduleType]);
 
   const eliminarRiegoProgramado = useCallback(async (id) => {
     if (!sectionPath || !id) return;
@@ -820,7 +1003,7 @@ export default function Dashboard() {
                   onClick={() => setSectionDropdownOpen(!sectionDropdownOpen)}
                   className="flex items-center gap-2.5 bg-white/60 dark:bg-slate-800/60 border border-gray-200 dark:border-slate-700 rounded-2xl px-3.5 py-2 hover:border-emerald-400 transition"
                 >
-                  <span className="text-xl">{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                  <span className="text-xl">{sec?.cultivoActual?.split(" ")[0] || ""}</span>
                   <div className="text-left">
                     <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Sección activa</p>
                     <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{sec?.nombre || (secId ? "Sección" : "Seleccionar")}</p>
@@ -841,7 +1024,7 @@ export default function Dashboard() {
                         <div key={iId}>
                           <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                             <span className={`w-1.5 h-1.5 rounded-full ${iOnline ? "bg-emerald-400" : "bg-gray-400"}`} />
-                            🏠 {inv?.nombre || iId.slice(-8)}
+                             {inv?.nombre || iId.slice(-8)}
                           </div>
                           {secs.map(([sId, s]) => {
                             const isActive = invId === iId && secId === sId;
@@ -851,9 +1034,9 @@ export default function Dashboard() {
                                 onClick={() => { selectInvernadero(iId); selectSeccion(sId); setSectionDropdownOpen(false); }}
                                 className={`w-full text-left px-5 py-2.5 text-sm flex items-center gap-2 transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 ${isActive ? "text-emerald-600 font-bold bg-emerald-50/50 dark:bg-emerald-900/10" : "text-gray-700 dark:text-gray-300"}`}
                               >
-                                <span>{s?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                                <span>{s?.cultivoActual?.split(" ")[0] || ""}</span>
                                 {s?.nombre || sId}
-                                {isActive && <span className="ml-auto text-[10px] font-bold text-emerald-500">✓</span>}
+                                {isActive && <span className="ml-auto text-[10px] font-bold text-emerald-500">Activo</span>}
                               </button>
                             );
                           })}
@@ -886,11 +1069,11 @@ export default function Dashboard() {
             </StatusChip>
 
             <StatusChip
-              active={riego}
+              active={riegoActivo}
               activeClass="border-sky-200/60 text-sky-700 dark:border-sky-700/40 dark:text-sky-300"
               inactiveClass="border-gray-200/60 text-gray-500 dark:border-gray-700/40 dark:text-gray-400"
             >
-              <WiRaindrop className="text-base" /> {riego ? "Riego activo" : "Riego off"}
+              <WiRaindrop className="text-base" /> {riegoActivo ? "Riego activo" : "Riego off"}
             </StatusChip>
 
             <StatusChip
@@ -913,20 +1096,16 @@ export default function Dashboard() {
           <SkeletonClima />
         )}
 
-        {/* Panel OASYS — solo si hay módulo vinculado */}
-        {moduloId && (
-          moduleOnline && moduloClima ? (
-            <WeatherPanel clima={moduloClima} formattedDate={formattedDate} title="📡 OASYS Módulo" />
-          ) : (
-            <OASYSOfflinePanel moduloId={moduloId} moduleOnline={moduleOnline} />
-          )
+        {/* Panel OASYS: solo aparece cuando hay clima disponible */}
+        {moduloId && moduleOnline && moduloClima && (
+          <WeatherPanel clima={moduloClima} formattedDate={formattedDate} title="OASYS Módulo" />
         )}
       </div>
 
       {/* ═══ NO SECTION SELECTED ═══ */}
       {!secId && (
         <div className="glass rounded-3xl p-10 sm:p-14 text-center space-y-4 animate-fadeUp">
-          <p className="text-6xl">🌱</p>
+          <p className="text-6xl"></p>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Sin sección activa</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
             Selecciona un invernadero y una sección desde el menú superior para comenzar a monitorear en tiempo real.
@@ -981,6 +1160,13 @@ export default function Dashboard() {
             )}
           </section>
 
+          <WaterConsumptionChart
+            items={historialRiego}
+            period={waterPeriod}
+            onPeriodChange={setWaterPeriod}
+            litrosHora={litrosHora}
+          />
+
           {/* IA Panel */}
           {ia ? (
             <IAPanel ia={ia} />
@@ -1024,10 +1210,10 @@ export default function Dashboard() {
             <StatusCard
               title="Sistema de riego"
               icon={<WiRaindrop className="text-2xl text-sky-500" />}
-              accentColor={riego ? "border-l-sky-500" : "border-l-gray-300 dark:border-l-gray-600"}
-              isActive={riego}
-              status={riego ? "Activo — regando" : "Apagado"}
-              description={riego ? "Válvula de riego abierta" : "Válvula cerrada, sin riego activo"}
+              accentColor={riegoActivo ? "border-l-sky-500" : "border-l-gray-300 dark:border-l-gray-600"}
+              isActive={riegoActivo}
+              status={riegoActivo ? "Activo — regando" : "Apagado"}
+              description={riegoActivo ? "Bomba de riego encendida" : "Bomba en reposo, sin riego activo"}
             />
 
             <StatusCard
@@ -1143,6 +1329,7 @@ export default function Dashboard() {
                       <p className="text-sm font-bold text-gray-800 dark:text-gray-100">{item.hora}</p>
                       <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
                         {item.tipo || "riego"} · {item.duracionMin || 1} min
+                        {item.litrosEstimados ? ` · ${item.litrosEstimados} L est.` : ""}
                       </p>
                     </div>
                     <button

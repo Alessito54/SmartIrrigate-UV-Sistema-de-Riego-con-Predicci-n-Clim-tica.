@@ -20,6 +20,11 @@ static String _chipId = "";
 
 static bool _ready = false;
 static bool _safeStateAppliedForBoot = false;
+static bool _historyReady = false;
+static bool _trackedBombaState = false;
+static bool _trackedRiegoOwnedByWeb = false;
+static unsigned long _trackedRiegoStartMs = 0;
+static String _trackedRiegoMode = "manual";
 
 static unsigned long _lastHeartbeat   = 0;
 static unsigned long _lastPoll        = 0;
@@ -54,6 +59,88 @@ static float _getFloatOr(const String& path, float fallback) {
         return _fbData.intData();
     }
     return fallback;
+}
+
+static String _getStringOr(const String& path, const String& fallback) {
+    if (Firebase.RTDB.getString(&_fbData, path)) {
+        return _fbData.stringData();
+    }
+    return fallback;
+}
+
+static void _trackRiegoHistory(bool nextState, const String& mode) {
+    if (_invId.length() == 0 || _secId.length() == 0 || !firebaseIsReady()) return;
+
+    if (!_historyReady) {
+        _trackedBombaState = getBombaState();
+        if (_trackedBombaState) {
+            _trackedRiegoStartMs = millis();
+            _trackedRiegoMode = mode;
+        }
+        _historyReady = true;
+    }
+
+    if (nextState == _trackedBombaState) return;
+
+    String sectionPath = _sectionPath();
+    float litrosHora = _getFloatOr(sectionPath + "/configuracionBomba/litrosHora", DEFAULT_BOMBA_LITROS_HORA);
+    if (litrosHora <= 0) litrosHora = DEFAULT_BOMBA_LITROS_HORA;
+
+    if (nextState) {
+        _trackedRiegoStartMs = millis();
+        _trackedRiegoMode = mode;
+
+        String estadoPath = sectionPath + "/estadoRiego";
+        String existingOrigin = _getStringOr(estadoPath + "/origen", "");
+        existingOrigin.trim();
+        _trackedRiegoOwnedByWeb = existingOrigin == "web";
+        if (_trackedRiegoOwnedByWeb) {
+            Serial.println("[FB] Riego manual iniciado por web; ESP32 no duplicara historial.");
+            _trackedBombaState = nextState;
+            return;
+        }
+
+        Firebase.RTDB.setBool(&_fbData, estadoPath + "/activo", true);
+        Firebase.RTDB.setString(&_fbData, estadoPath + "/modo", mode);
+        Firebase.RTDB.setString(&_fbData, estadoPath + "/origen", "esp32");
+        Firebase.RTDB.setFloat(&_fbData, estadoPath + "/litrosHora", litrosHora);
+        Firebase.RTDB.setInt(&_fbData, estadoPath + "/inicioMs", _trackedRiegoStartMs);
+        Firebase.RTDB.setTimestamp(&_fbData, estadoPath + "/inicioTs");
+        Serial.println("[FB] Historial riego iniciado: " + estadoPath);
+    } else {
+        if (_trackedRiegoOwnedByWeb) {
+            _trackedRiegoOwnedByWeb = false;
+            _trackedBombaState = nextState;
+            Serial.println("[FB] Riego manual cerrado por web; ESP32 no duplicara historial.");
+            return;
+        }
+
+        unsigned long elapsedMs = millis() - _trackedRiegoStartMs;
+        int duracionSeg = max(1, (int)((elapsedMs + 500) / 1000));
+        float litros = (litrosHora / 3600.0) * duracionSeg;
+
+        FirebaseJson json;
+        json.set("duracion_seg", duracionSeg);
+        json.set("litros", litros);
+        json.set("litrosHora", litrosHora);
+        json.set("modo", _trackedRiegoMode);
+        json.set("tipo", _trackedRiegoMode);
+        json.set("origen", "esp32");
+        json.set("inicioMs", (int)_trackedRiegoStartMs);
+        json.set("finMs", (int)millis());
+
+        String historyPath = sectionPath + "/historial_riego";
+        if (Firebase.RTDB.pushJSON(&_fbData, historyPath, &json)) {
+            String key = _fbData.pushName();
+            Firebase.RTDB.setTimestamp(&_fbData, historyPath + "/" + key + "/finTs");
+            Firebase.RTDB.setBool(&_fbData, sectionPath + "/estadoRiego/activo", false);
+            Serial.println("[FB] Historial riego guardado: " + historyPath + "/" + key);
+        } else {
+            Serial.println("[FB] No pude guardar historial riego: " + _fbData.errorReason());
+        }
+    }
+
+    _trackedBombaState = nextState;
 }
 
 static void _applySafeControlState() {
@@ -94,6 +181,7 @@ static bool _resolveLinkedInvernadero() {
             if (linkedInvId != _invId || linkedSecId != _secId) {
                 _invId = linkedInvId;
                 _secId = linkedSecId;
+                _historyReady = false;
                 wifiSaveInvernaderoConfig(_invId, _secId, wifiGetSavedUserId());
                 Serial.println("[FB] Vinculación detectada: " + _sectionPath());
             }
@@ -105,6 +193,7 @@ static bool _resolveLinkedInvernadero() {
             _invId = "";
             _secId = "";
             _safeStateAppliedForBoot = false;
+            _historyReady = false;
             wifiSaveInvernaderoConfig(_invId, _secId, wifiGetSavedUserId());
             Serial.println("[FB] Módulo sin sección vinculada.");
         }
@@ -119,6 +208,7 @@ static bool _resolveLinkedInvernadero() {
             if (savedInvId != _invId || savedSecId != _secId) {
                 _invId = savedInvId;
                 _secId = savedSecId;
+                _historyReady = false;
                 Serial.println("[FB] Usando sección guardada por configuración WiFi: " + _sectionPath());
             }
             _applySafeControlState();
@@ -211,6 +301,7 @@ void firebasePollControl() {
         bool riego = _getBoolOr(controlPath + "/riego", getBombaState());
         bool malla = _getBoolOr(controlPath + "/malla", getMallaState());
         Serial.println("[FB] Control manual: riego=" + String(riego ? "true" : "false") + ", malla=" + String(malla ? "true" : "false"));
+        _trackRiegoHistory(riego, "manual");
         setBomba(riego);
         setMalla(malla);
         return;
@@ -230,6 +321,7 @@ void firebasePollControl() {
     bool mallaAuto = (accionMallaTemp && getTemperaturaAire() > tempMax)
                   || (accionMallaRad && radiacion > radiacionMax);
 
+    _trackRiegoHistory(riegoAuto, "automatico");
     setBomba(riegoAuto);
     setMalla(mallaAuto);
 }

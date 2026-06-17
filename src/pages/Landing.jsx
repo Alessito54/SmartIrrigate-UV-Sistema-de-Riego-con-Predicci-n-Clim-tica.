@@ -21,10 +21,10 @@ const carouselSlides = [
 ];
 
 const stats = [
-    { value: "40%", label: "Ahorro de agua", emoji: "💧" },
-    { value: "24/7", label: "Monitoreo continuo", emoji: "⏱" },
-    { value: "IoT", label: "Módulo OASYS", emoji: "📡" },
-    { value: "Auto", label: "Automatización", emoji: "⚙️" },
+    { value: "40%", label: "Ahorro de agua", emoji: "" },
+    { value: "24/7", label: "Monitoreo continuo", emoji: "" },
+    { value: "IoT", label: "Módulo OASYS", emoji: "" },
+    { value: "Auto", label: "Automatización", emoji: "" },
 ];
 
 const features = [
@@ -35,9 +35,9 @@ const features = [
 ];
 
 const steps = [
-    { n: "01", emoji: "📡", color: "emerald", title: "Instala tu OASYS", desc: "Conecta el módulo climático en tu invernadero. Al encenderse se registra automáticamente y comienza a transmitir." },
-    { n: "02", emoji: "📊", color: "sky", title: "Monitorea en tiempo real", desc: "Temperatura, humedad, radiación y viento llegan al dashboard en tiempo real. También el clima de tu ubicación." },
-    { n: "03", emoji: "⚡", color: "violet", title: "El sistema actúa solo", desc: "Configura umbrales y el sistema activa el riego o la malla sombra automáticamente cuando las condiciones lo requieran." },
+    { n: "01", emoji: "", color: "emerald", title: "Instala tu OASYS", desc: "Conecta el módulo climático en tu invernadero. Al encenderse se registra automáticamente y comienza a transmitir." },
+    { n: "02", emoji: "", color: "sky", title: "Monitorea en tiempo real", desc: "Temperatura, humedad, radiación y viento llegan al dashboard en tiempo real. También el clima de tu ubicación." },
+    { n: "03", emoji: "", color: "violet", title: "El sistema actúa solo", desc: "Configura umbrales y el sistema activa el riego o la malla sombra automáticamente cuando las condiciones lo requieran." },
 ];
 
 export default function Landing() {
@@ -107,14 +107,14 @@ export default function Landing() {
                         </Link>
                     </nav>
                     <button className={`md:hidden text-3xl transition ${isScrolled ? "text-slate-700 dark:text-white" : "text-white"}`} onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-                        {mobileMenuOpen ? <FiX /> : <FiMenu />}
+                        {mobileMenuOpen ? <FiX />: <FiMenu />}
                     </button>
                 </div>
 
                 {mobileMenuOpen && (
                     <div className="md:hidden absolute top-full left-0 w-full glass py-8 flex flex-col items-center gap-6 shadow-2xl animate-fadeUp">
                         {navLinks.map((link) => (
-                            <a key={link.name} href={link.href} onClick={() => setMobileMenuOpen(false)} className="text-lg font-bold text-slate-800 dark:text-white">{link.name}</a>
+                            <a key={link.name} href={link.href} onClick={() =>setMobileMenuOpen(false)} className="text-lg font-bold text-slate-800 dark:text-white">{link.name}</a>
                         ))}
                         <Link to={user ? "/dashboard" : "/login"} className="px-8 py-4 bg-emerald-600 text-white font-bold rounded-xl" onClick={() => setMobileMenuOpen(false)}>
                             {user ? "Ir a la App" : "Iniciar Sesión"}
@@ -152,7 +152,7 @@ export default function Landing() {
 
                         {/* Feature pills */}
                         <div className="flex flex-wrap justify-center gap-3 mb-10">
-                            {["📡 Módulo IoT", "💧 40% menos agua", "⚡ Automatización", "🌦 Clima en tiempo real"].map((tag) => (
+                            {[" Módulo IoT", " 40% menos agua", " Automatización", " Clima en tiempo real"].map((tag) => (
                                 <span key={tag} className="bg-white/10 backdrop-blur-md border border-white/20 text-white/90 text-xs font-semibold px-3.5 py-1.5 rounded-full">
                                     {tag}
                                 </span>
@@ -277,7 +277,7 @@ export default function Landing() {
                                             <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
                                         </div>
                                         <h3 className="text-2xl font-bold text-white mb-2">Video Promocional</h3>
-                                        <p className="text-slate-400">Agrega el enlace en <code className="text-emerald-400">src/config.js</code> → <code className="text-emerald-400">PROMO_VIDEO_URL</code>.</p>
+                                        <p className="text-slate-400">Agrega el enlace en <code className="text-emerald-400">src/config.js</code>, en <code className="text-emerald-400">PROMO_VIDEO_URL</code>.</p>
                                     </div>
                                 )}
                             </div>
@@ -359,9 +359,9 @@ export default function Landing() {
                                 </h3>
                                 <ul className="space-y-4">
                                     {[
-                                        { emoji: "💡", v: "Innovación Continua", d: "Adoptamos nuevas tecnologías para mantenernos a la vanguardia." },
-                                        { emoji: "🌿", v: "Sostenibilidad", d: "Cada decisión considera el impacto ambiental a largo plazo." },
-                                        { emoji: "⚡", v: "Eficiencia Operativa", d: "Optimizamos cada proceso para maximizar resultados." },
+                                        { emoji: "", v: "Innovación Continua", d: "Adoptamos nuevas tecnologías para mantenernos a la vanguardia." },
+                                        { emoji: "", v: "Sostenibilidad", d: "Cada decisión considera el impacto ambiental a largo plazo." },
+                                        { emoji: "", v: "Eficiencia Operativa", d: "Optimizamos cada proceso para maximizar resultados." },
                                     ].map(({ emoji, v, d }) => (
                                         <li key={v} className="flex items-start gap-3">
                                             <span className="text-xl w-8 flex-shrink-0 mt-0.5">{emoji}</span>
@@ -380,9 +380,9 @@ export default function Landing() {
                                 </h3>
                                 <ul className="space-y-4">
                                     {[
-                                        { emoji: "💧", m: "Ahorro del 40% de agua", d: "Reducimos el consumo con riego basado en pronóstico real." },
-                                        { emoji: "⚡", m: "Automatización robusta", d: "El sistema activa riego y malla automáticamente según los umbrales configurados." },
-                                        { emoji: "🔧", m: "Cero mantenimiento", d: "Hardware diseñado para funcionar años sin intervención." },
+                                        { emoji: "", m: "Ahorro del 40% de agua", d: "Reducimos el consumo con riego basado en pronóstico real." },
+                                        { emoji: "", m: "Automatización robusta", d: "El sistema activa riego y malla automáticamente según los umbrales configurados." },
+                                        { emoji: "", m: "Cero mantenimiento", d: "Hardware diseñado para funcionar años sin intervención." },
                                     ].map(({ emoji, m, d }) => (
                                         <li key={m} className="flex items-start gap-3">
                                             <span className="text-xl w-8 flex-shrink-0 mt-0.5">{emoji}</span>
@@ -464,7 +464,7 @@ export default function Landing() {
                         <div className="glass bg-slate-800/60 border border-slate-700 p-8 md:p-10 rounded-3xl shadow-2xl">
                             {contactSent ? (
                                 <div className="text-center py-12 space-y-3">
-                                    <p className="text-5xl">✅</p>
+                                    <p className="text-5xl"></p>
                                     <p className="text-xl font-bold text-white">¡Mensaje enviado!</p>
                                     <p className="text-slate-400 text-sm">Abrimos tu cliente de correo. Nos pondremos en contacto pronto.</p>
                                 </div>
@@ -557,7 +557,7 @@ export default function Landing() {
 
                 {/* Bottom bar */}
                 <div className="max-w-7xl mx-auto px-4 py-5 flex flex-col sm:flex-row justify-between items-center gap-2 text-xs text-slate-600">
-                    <p>© {new Date().getFullYear()} {PROJECT_NAME}. Todos los derechos reservados.</p>
+                    <p>{new Date().getFullYear()} {PROJECT_NAME}. Todos los derechos reservados.</p>
                     <p className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                         Ingeniería de Software · UV

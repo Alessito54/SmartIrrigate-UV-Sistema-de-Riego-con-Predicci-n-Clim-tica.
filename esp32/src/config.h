@@ -63,6 +63,9 @@ static const unsigned long SERIAL_REPORT_INTERVAL_MS   = 5000;
 // Intervalo para enviar datos del sensor SHT31 a Firebase (ms)
 static const unsigned long FIREBASE_SENSOR_INTERVAL_MS = 5000;
 
+// Flujo por defecto de la bomba si la web aún no tiene configuración (L/h)
+static const float DEFAULT_BOMBA_LITROS_HORA = 120.0;
+
 // ── Firebase: Plantillas de rutas ───────────────────────────
 // Estas se construyen dinámicamente con invId + secId.
 // Ruta base de control: invernaderos/{invId}/secciones/{secId}

@@ -48,7 +48,7 @@ function GreenhouseSelector() {
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
+        <div className="absolute top-full left-0 md:left-full md:right-auto right-0 md:top-0 md:ml-2 mt-1 md:mt-0 z-[100] w-full md:w-72 max-h-[70vh] overflow-y-auto bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl">
           {invEntries.map(([id, inv]) => {
             const secs = Object.entries(inv?.secciones || {});
             const invOnline = secs.some(([sId, sec]) => {
@@ -60,7 +60,7 @@ function GreenhouseSelector() {
               <div key={id}>
                 <div className="px-3 py-2 bg-gray-50 dark:bg-slate-800 text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                   <span className={`w-1.5 h-1.5 rounded-full ${invOnline ? "bg-emerald-400" : "bg-gray-400"}`} />
-                  🏠 {inv?.nombre || id.slice(-8)}
+                   {inv?.nombre || id.slice(-8)}
                 </div>
                 {secs.map(([sId, sec]) => (
                   <button
@@ -69,7 +69,7 @@ function GreenhouseSelector() {
                     className={`w-full text-left px-4 py-2.5 text-xs transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 flex items-center gap-2
                       ${invId === id && secId === sId ? "text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-50/50 dark:bg-emerald-900/10" : "text-gray-700 dark:text-gray-300"}`}
                   >
-                    <span>{sec?.cultivoActual?.split(" ")[0] || "🌱"}</span>
+                    <span>{sec?.cultivoActual?.split(" ")[0] || ""}</span>
                     <span className="truncate">{sec?.nombre || sId}</span>
                     {invId === id && secId === sId && <FiChevronRight className="ml-auto flex-shrink-0 text-emerald-500" size={10} />}
                   </button>
@@ -106,7 +106,7 @@ export default function Layout({ children }) {
           backdrop-blur-2xl
           border-r border-white/60 dark:border-slate-800/50
           shadow-[2px_0_20px_rgba(0,0,0,0.04)]
-          overflow-hidden
+          overflow-visible
         ">
           {/* Decorative glow */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-r-none">

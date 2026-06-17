@@ -3,6 +3,7 @@ import { ref, set, push, remove, onValue } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { isModuleOnline, linkModuloToSeccion, unlinkModulo } from "../services/modulos";
+import { DEFAULT_BOMBA_LITROS_HORA, getLitrosHora } from "../services/riegoHistorial";
 import {
     FiPlus, FiCheckCircle, FiLayers, FiLink, FiSettings,
     FiChevronDown, FiChevronUp,
@@ -11,29 +12,29 @@ import {
 
 // ─── Crops list ────────────────────────────────────────────────────────────
 const CULTIVOS_PRESET = [
-    { emoji: "🍅", nombre: "Tomate" },
-    { emoji: "🫑", nombre: "Chile / Pimiento" },
-    { emoji: "🥒", nombre: "Pepino" },
-    { emoji: "🥬", nombre: "Lechuga" },
-    { emoji: "🫒", nombre: "Aceitunas" },
-    { emoji: "🌽", nombre: "Maíz" },
-    { emoji: "🥕", nombre: "Zanahoria" },
-    { emoji: "🧅", nombre: "Cebolla" },
-    { emoji: "🧄", nombre: "Ajo" },
-    { emoji: "🥦", nombre: "Brócoli" },
-    { emoji: "🍓", nombre: "Fresa" },
-    { emoji: "🫛", nombre: "Chícharo / Ejote" },
-    { emoji: "🌿", nombre: "Hierbas aromáticas" },
-    { emoji: "🍃", nombre: "Espinaca" },
-    { emoji: "🥔", nombre: "Papa" },
-    { emoji: "🍆", nombre: "Berenjena" },
-    { emoji: "🫚", nombre: "Flor comestible" },
-    { emoji: "🌱", nombre: "Otro" },
+    { nombre: "Tomate" },
+    { nombre: "Chile / Pimiento" },
+    { nombre: "Pepino" },
+    { nombre: "Lechuga" },
+    { nombre: "Aceitunas" },
+    { nombre: "Maíz" },
+    { nombre: "Zanahoria" },
+    { nombre: "Cebolla" },
+    { nombre: "Ajo" },
+    { nombre: "Brócoli" },
+    { nombre: "Fresa" },
+    { nombre: "Chícharo / Ejote" },
+    { nombre: "Hierbas aromáticas" },
+    { nombre: "Espinaca" },
+    { nombre: "Papa" },
+    { nombre: "Berenjena" },
+    { nombre: "Flor comestible" },
+    { nombre: "Otro" },
 ];
 
 const DEFAULT_SECTION = {
     nombre: "Nueva Sección",
-    emoji: "🌱",
+    configuracionBomba: { litrosHora: DEFAULT_BOMBA_LITROS_HORA },
     control: { malla: false, riego: false },
     controlAutomatico: {
         activo: false,
@@ -57,7 +58,7 @@ function ConfirmDialog({ message, onConfirm, onCancel }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeUp">
             <div className="glass rounded-3xl p-6 max-w-sm w-full space-y-4 shadow-2xl">
-                <div className="text-4xl text-center">⚠️</div>
+                <div className="text-4xl text-center"></div>
                 <p className="text-center text-sm font-medium text-gray-700 dark:text-gray-200">{message}</p>
                 <div className="flex gap-3">
                     <button onClick={onConfirm} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl transition text-sm">Sí, eliminar</button>
@@ -89,9 +90,8 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     const [draftName, setDraftName] = useState(sec?.nombre || "");
     const [savingName, setSavingName] = useState(false);
 
-    // Section icon (click to change)
-    const [secEmoji, setSecEmoji] = useState(sec?.emoji || sec?.cultivoActual?.split(" ")[0] || "🌱");
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+    const [litrosHora, setLitrosHora] = useState(getLitrosHora(sec));
+    const [savingPump, setSavingPump] = useState(false);
 
     // Delete
     const [confirmDelete, setConfirmDelete] = useState(false);
@@ -100,6 +100,10 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
     const [moduloUnlinking, setModuloUnlinking] = useState(false);
 
     const secPath = `invernaderos/${invId}/secciones/${secId}`;
+
+    useEffect(() => {
+        setLitrosHora(getLitrosHora(sec));
+    }, [sec]);
 
     // ─── Load autoConfig from Firebase ────────────────────────────────
     useEffect(() => {
@@ -143,7 +147,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
         }));
     }
 
-    // ─── Edit any value → auto-switch to Personalizado ────────────────
+    // ─── Edit any value, auto-switch to Personalizado ────────────────
     function setUmbral(pathParts, value) {
         setSelectedPreset(null); // Any manual edit = Personalizado
         setAutoConfig((prev) => {
@@ -157,16 +161,10 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
     // ─── Handlers ─────────────────────────────────────────────────────
     async function selectCultivo(c) {
-        const val = `${c.emoji} ${c.nombre}`;
+        const val = c.nombre;
         await set(ref(db, `${secPath}/cultivoActual`), val);
         setCultivo(val);
         setShowCrops(false);
-    }
-
-    async function saveEmoji(emoji) {
-        setSecEmoji(emoji);
-        setShowEmojiPicker(false);
-        await set(ref(db, `${secPath}/emoji`), emoji);
     }
 
     async function guardarAutoConfig() {
@@ -183,6 +181,21 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
             await onReload();
             setEditingName(false);
         } finally { setSavingName(false); }
+    }
+
+    async function guardarBomba() {
+        const value = Math.max(1, Number(litrosHora) || DEFAULT_BOMBA_LITROS_HORA);
+        setSavingPump(true);
+        try {
+            await set(ref(db, `${secPath}/configuracionBomba`), {
+                litrosHora: value,
+                actualizadoEn: Date.now(),
+            });
+            setLitrosHora(value);
+            await onReload();
+        } finally {
+            setSavingPump(false);
+        }
     }
 
     async function eliminarSeccion() {
@@ -224,28 +237,6 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                 {/* ══ HEADER ══ */}
                 <div className="flex items-center justify-between px-4 py-3 bg-white/60 dark:bg-slate-700/40">
                     <div className="flex items-center gap-3">
-                        {/* Emoji icon — click to edit */}
-                        <div className="relative">
-                            <button
-                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                                className="text-2xl hover:scale-110 transition-transform active:scale-95 rounded-xl p-0.5 hover:bg-gray-100 dark:hover:bg-slate-700"
-                                title="Cambiar ícono"
-                            >
-                                {secEmoji}
-                            </button>
-                            {showEmojiPicker && (
-                                <div className="absolute top-full left-0 mt-1 z-50 grid grid-cols-4 gap-1 p-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl w-52">
-                                    {CULTIVOS_PRESET.map((c) => (
-                                        <button key={c.emoji} onClick={() => saveEmoji(c.emoji)}
-                                            className={`text-xl p-1.5 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition ${secEmoji === c.emoji ? "bg-emerald-100 dark:bg-emerald-900/30" : ""}`}
-                                            title={c.nombre}>
-                                            {c.emoji}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
                         {/* Name — inline edit (hover to reveal pencil) */}
                         <div>
                             {editingName ? (
@@ -255,7 +246,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                         onKeyDown={(e) => { if (e.key === "Enter") guardarNombreSeccion(); if (e.key === "Escape") setEditingName(false); }}
                                         className="text-sm font-bold bg-white dark:bg-slate-700 border border-emerald-400 rounded-lg px-2 py-0.5 outline-none w-36" />
                                     <button onClick={guardarNombreSeccion} disabled={savingName} className="p-1 text-emerald-500 hover:text-emerald-600"><FiCheck size={13} /></button>
-                                    <button onClick={() => setEditingName(false)} className="p-1 text-gray-400 hover:text-gray-600"><FiX size={13} /></button>
+                                    <button onClick={() =>setEditingName(false)} className="p-1 text-gray-400 hover:text-gray-600"><FiX size={13} /></button>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-1.5">
@@ -274,11 +265,11 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                     <div className="flex items-center gap-2">
                         <span className={`flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${isOnline ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400" : "bg-gray-100 text-gray-500 dark:bg-slate-700 dark:text-gray-400"}`}>
-                            {isOnline ? <FiWifi size={10} /> : <FiWifiOff size={10} />}
+                            {isOnline ? <FiWifi size={10} />: <FiWifiOff size={10} />}
                             {isOnline ? "Online" : "Offline"}
                         </span>
                         <button onClick={() => setShowConfig(!showConfig)} className="p-1.5 rounded-xl text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition" title="Configurar">
-                            {showConfig ? <FiChevronUp size={16} /> : <FiSettings size={16} />}
+                            {showConfig ? <FiChevronUp size={16} />: <FiSettings size={16} />}
                         </button>
                         <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-xl text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition" title="Eliminar sección">
                             <FiTrash2 size={15} />
@@ -289,15 +280,14 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                 {/* ══ SENSOR MINIBAR ══ */}
                 <div className="grid grid-cols-3 sm:grid-cols-6 divide-x divide-gray-100 dark:divide-slate-700/50 px-1">
                     {[
-                        { key: "temperatura",      label: "T.Amb",   unit: "°C", icon: "🌡️" },
-                        { key: "humedadAmbiente",  label: "H.Amb",   unit: "%",  icon: "💨" },
-                        { key: "temperaturasuelo", label: "T.Suelo", unit: "°C", icon: "🪨" },
-                        { key: "humedad",           label: "H.Suelo", unit: "%",  icon: "💧" },
-                        { key: "radiacion",         label: "Rad.",    unit: "W/m²", icon: "☀️" },
-                        { key: "viento",            label: "Viento",  unit: "km/h", icon: "🌬️" },
-                    ].map(({ key, label, unit, icon }) => (
+                        { key: "temperatura",      label: "T.Amb",   unit: "°C" },
+                        { key: "humedadAmbiente",  label: "H.Amb",   unit: "%" },
+                        { key: "temperaturasuelo", label: "T.Suelo", unit: "°C" },
+                        { key: "humedad",           label: "H.Suelo", unit: "%" },
+                        { key: "radiacion",         label: "Rad.",    unit: "W/m²" },
+                        { key: "viento",            label: "Viento",  unit: "km/h" },
+                    ].map(({ key, label, unit }) => (
                         <div key={key} className="flex flex-col items-center py-2.5 px-1">
-                            <span className="text-base">{icon}</span>
                             <span className="text-[10px] font-bold text-gray-800 dark:text-gray-100 mt-0.5">
                                 {sensors[key] !== undefined && sensors[key] !== null
                                     ? Number(sensors[key]).toFixed(1)
@@ -315,7 +305,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                         {/* Cultivo */}
                         <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">🌾 Cultivo</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cultivo</p>
                             <button onClick={() => setShowCrops(!showCrops)}
                                 className="w-full flex items-center justify-between bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-2.5 text-sm text-left hover:border-emerald-400 transition">
                                 <span className={cultivo ? "text-gray-800 dark:text-gray-100 font-medium" : "text-gray-400"}>{cultivo || "Selecciona un cultivo..."}</span>
@@ -326,8 +316,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                     <div className="grid grid-cols-3 gap-1 p-3 max-h-52 overflow-y-auto">
                                         {CULTIVOS_PRESET.map((c) => (
                                             <button key={c.nombre} onClick={() => selectCultivo(c)}
-                                                className={`flex flex-col items-center text-center gap-1 p-2.5 rounded-xl text-xs font-medium transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 ${cultivo === `${c.emoji} ${c.nombre}` ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700" : "text-gray-700 dark:text-gray-300"}`}>
-                                                <span className="text-2xl">{c.emoji}</span>
+                                                className={`flex flex-col items-center text-center gap-1 p-2.5 rounded-xl text-xs font-medium transition hover:bg-emerald-50 dark:hover:bg-emerald-900/20 ${cultivo === c.nombre ? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700" : "text-gray-700 dark:text-gray-300"}`}>
                                                 <span className="leading-tight">{c.nombre}</span>
                                             </button>
                                         ))}
@@ -337,7 +326,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                         </div>
 
                         <div>
-                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">📡 OASYS Módulo</p>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">OASYS Módulo</p>
                             {linkedMId ? (
                                 <div className="flex items-center justify-between bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl px-3 py-2.5">
                                     <div className="min-w-0">
@@ -392,10 +381,44 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                         disabled={moduloLinking || !selectedModuloId}
                                         className="px-3 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1"
                                     >
-                                        {moduloLinking ? "..." : <><FiLink size={12} /> Vincular</>}
+                                        {moduloLinking ? "..." : <><FiLink size={12} />Vincular</>}
                                     </button>
                                 </div>
                             )}
+                        </div>
+
+                        <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Bomba de agua</p>
+                            <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-3 space-y-3">
+                                <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+                                    <label className="space-y-1">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                                            Flujo aproximado
+                                        </span>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            step="1"
+                                            value={litrosHora}
+                                            onChange={(e) => setLitrosHora(e.target.value)}
+                                            className="w-full bg-white/70 dark:bg-slate-900/70 border border-gray-200 dark:border-slate-700 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-sky-500/40"
+                                        />
+                                    </label>
+                                    <span className="pb-2 text-xs font-bold text-sky-600 dark:text-sky-400">L/h</span>
+                                </div>
+                                <div className="flex items-center justify-between gap-3">
+                                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                                        Se usa para calcular consumo: 5 min con {Number(litrosHora) || DEFAULT_BOMBA_LITROS_HORA} L/h = {(((Number(litrosHora) || DEFAULT_BOMBA_LITROS_HORA) / 60) * 5).toFixed(1)} L aprox.
+                                    </p>
+                                    <button
+                                        onClick={guardarBomba}
+                                        disabled={savingPump}
+                                        className="px-3 py-2 bg-sky-600 text-white rounded-xl text-xs font-bold hover:bg-sky-500 transition disabled:opacity-50"
+                                    >
+                                        {savingPump ? "..." : "Guardar"}
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         {/* ══ MODO AUTOMÁTICO ══ */}
@@ -403,7 +426,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                             <div className="space-y-4">
                                 {/* Header row with toggle */}
                                 <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">⚡ Modo Automático</p>
+                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Modo Automático</p>
                                     <button onClick={() => setUmbral(["activo"], !autoConfig.activo)}
                                         className={`relative inline-flex h-6 w-11 rounded-full transition-all duration-300 flex-shrink-0 ${autoConfig.activo ? "bg-emerald-500" : "bg-gray-300 dark:bg-gray-600"}`}>
                                         <span className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-md transform transition-all duration-300 ${autoConfig.activo ? "translate-x-5" : ""}`} />
@@ -423,7 +446,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                                     <span className="text-[10px] bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 font-bold px-1.5 py-0.5 rounded-full">Preset</span>
                                                 </>
                                             ) : (
-                                                <span className="flex items-center gap-1.5 text-gray-500">🔧 <b>Personalizado</b></span>
+                                                <span className="flex items-center gap-1.5 text-gray-500"><b>Personalizado</b></span>
                                             )}
                                         </span>
                                         <FiChevronDown className={`text-gray-400 transition ${showPresetDropdown ? "rotate-180" : ""}`} size={14} />
@@ -431,7 +454,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                                     {selectedPreset && (
                                         <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 pl-1">
-                                            ✏️ Puedes editar los valores — al modificar cambiará a <b>Personalizado</b>.
+                                             Puedes editar los valores — al modificar cambiará a <b>Personalizado</b>.
                                         </p>
                                     )}
 
@@ -439,7 +462,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                         <div className="absolute top-full left-0 right-0 mt-1 z-50 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
                                             <button onClick={() => { setSelectedPreset(null); setShowPresetDropdown(false); }}
                                                 className="w-full text-left px-4 py-3 text-sm text-gray-500 hover:bg-gray-50 dark:hover:bg-slate-800 transition border-b border-gray-100 dark:border-slate-800 flex items-center gap-2">
-                                                🔧 <span className="font-semibold">Personalizado</span>
+                                                 <span className="font-semibold">Personalizado</span>
                                             </button>
                                             {presetEntries.length === 0 && (
                                                 <p className="px-4 py-3 text-xs text-gray-400">
@@ -458,11 +481,11 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                     )}
                                 </div>
 
-                                {/* ── Sliders — always editable, any change → Personalizado ── */}
+                                {/* ── Sliders, always editable; any change uses Personalizado ── */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     {/* Humidity */}
                                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2">
-                                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400">💧 Humedad mínima</p>
+                                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Humedad mínima</p>
                                         <input type="range" min={0} max={100} value={autoConfig.umbrales?.humedad?.min ?? 40}
                                             onChange={(e) => setUmbral(["umbrales", "humedad", "min"], parseInt(e.target.value))}
                                             className="w-full accent-blue-500 cursor-pointer" />
@@ -476,7 +499,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                                     {/* Temperature */}
                                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2">
-                                        <p className="text-xs font-bold text-orange-600 dark:text-orange-400">🌡️ Temperatura máx.</p>
+                                        <p className="text-xs font-bold text-orange-600 dark:text-orange-400">Temperatura máx.</p>
                                         <input type="range" min={20} max={50} value={autoConfig.umbrales?.temperatura?.max ?? 35}
                                             onChange={(e) => setUmbral(["umbrales", "temperatura", "max"], parseInt(e.target.value))}
                                             className="w-full accent-orange-500 cursor-pointer" />
@@ -490,7 +513,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                                     {/* Radiation */}
                                     <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2 sm:col-span-2">
-                                        <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">☀️ Radiación máx. (W/m²)</p>
+                                        <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Radiación máx. (W/m²)</p>
                                         <input type="range" min={0} max={1200} value={autoConfig.umbrales?.radiacion?.max ?? 900}
                                             onChange={(e) => setUmbral(["umbrales", "radiacion", "max"], parseInt(e.target.value))}
                                             className="w-full accent-yellow-500 cursor-pointer" />
@@ -505,7 +528,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
 
                                 <button onClick={guardarAutoConfig} disabled={savingAuto}
                                     className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-sm transition shadow-lg shadow-emerald-600/20 disabled:opacity-50">
-                                    {savingAuto ? "Guardando..." : "💾 Guardar configuración automática"}
+                                    {savingAuto ? "Guardando..." : " Guardar configuración automática"}
                                 </button>
                             </div>
                         )}
@@ -571,7 +594,7 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                     onClick={() => setExpanded(!expanded)}>
                     <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center text-xl ${isActive ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-gray-100 dark:bg-slate-700"}`}>
-                            🏠
+                            
                         </div>
                         <div>
                             {editingName ? (
@@ -581,7 +604,7 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                                         onKeyDown={(e) => { if (e.key === "Enter") guardarNombre(); if (e.key === "Escape") setEditingName(false); }}
                                         className="font-bold text-sm bg-white/70 dark:bg-slate-700/70 border border-emerald-400 rounded-lg px-2 py-1 outline-none" />
                                     <button onClick={guardarNombre} disabled={savingName} className="p-1 text-emerald-500 hover:text-emerald-600"><FiCheck size={14} /></button>
-                                    <button onClick={() => setEditingName(false)} className="p-1 text-gray-400 hover:text-gray-600"><FiX size={14} /></button>
+                                    <button onClick={() =>setEditingName(false)} className="p-1 text-gray-400 hover:text-gray-600"><FiX size={14} /></button>
                                 </div>
                             ) : (
                                 <div className="flex items-center gap-1.5">
@@ -610,7 +633,7 @@ function InvernaderoCard({ invId, inv, isActive, onSelect, onReload, onDelete })
                                 Seleccionar
                             </button>
                         )}
-                        {isActive && <span className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-xl">✓ Activo</span>}
+                        {isActive && <span className="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-xl">Activo</span>}
                         <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
                             className="p-1.5 rounded-xl text-gray-300 dark:text-gray-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition"
                             title="Eliminar invernadero">
@@ -683,7 +706,7 @@ export default function Invernaderos() {
             });
             await set(ref(db, `usuarios/${user.uid}/invernaderos/${newId}`), true);
             await reloadInvernaderos();
-            flash(`✅ Invernadero "${newInvName}" creado`);
+            flash(` Invernadero "${newInvName}" creado`);
             setNewInvName(""); setAddingInv(false);
         } finally { setSaving(false); }
     }
@@ -707,7 +730,7 @@ export default function Invernaderos() {
         await remove(ref(db, `invernaderos/${id}`));
         await set(ref(db, `usuarios/${user.uid}/invernaderos/${id}`), null);
         await reloadInvernaderos();
-        flash("🗑️ Invernadero eliminado");
+        flash(" Invernadero eliminado");
     }
 
     const invEntries = Object.entries(invernaderos || {});
@@ -744,16 +767,16 @@ export default function Invernaderos() {
                             className="flex-1 bg-white/70 dark:bg-slate-800/70 border border-gray-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 transition" />
                         <button onClick={crearInvernadero} disabled={saving || !newInvName.trim()}
                             className="px-5 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-2 shadow-lg shadow-emerald-600/20">
-                            {saving ? "Creando..." : <><FiCheck /> Crear</>}
+                            {saving ? "Creando..." : <><FiCheck />Crear</>}
                         </button>
-                        <button onClick={() => setAddingInv(false)} className="px-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-500 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition"><FiX /></button>
+                        <button onClick={() =>setAddingInv(false)} className="px-4 py-3 bg-gray-100 dark:bg-slate-700 text-gray-500 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition"><FiX /></button>
                     </div>
                 </div>
             )}
 
             {invEntries.length === 0 && !addingInv && (
                 <div className="glass rounded-3xl p-14 text-center space-y-4">
-                    <div className="text-6xl">🏠</div>
+                    <div className="text-6xl"></div>
                     <h2 className="text-xl font-bold text-gray-900 dark:text-white">Sin invernaderos aún</h2>
                     <p className="text-gray-500 text-sm">Crea tu primer invernadero para comenzar a monitorear.</p>
                     <button onClick={() => setAddingInv(true)}

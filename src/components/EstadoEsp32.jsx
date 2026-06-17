@@ -18,7 +18,7 @@ export default function EstadoModulo({ moduloId }) {
           : "bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-400"
       }`}
     >
-      {online ? <FiWifi size={12} className="animate-breathe" /> : <FiWifiOff size={12} />}
+      {online ? <FiWifi size={12} className="animate-breathe" />: <FiWifiOff size={12} />}
       <span className="whitespace-nowrap">{online ? 'Módulo: Online' : 'Módulo: Offline'}</span>
     </div>
   );

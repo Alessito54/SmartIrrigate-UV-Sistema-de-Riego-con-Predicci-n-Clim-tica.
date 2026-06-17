@@ -19,7 +19,7 @@ export default function Login() {
     const [success, setSuccess] = useState(null);
     const [loading, setLoading] = useState(false);
 
-    // Already logged in → redirect
+    // Already logged in, redirect
     if (authLoading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-slate-950">
@@ -159,12 +159,12 @@ export default function Login() {
                         {/* Alerts */}
                         {error && (
                             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl p-4 flex gap-3 text-red-700 dark:text-red-400 animate-fadeUp text-sm shadow-sm font-medium">
-                                ⚠️ <span>{error}</span>
+                                 <span>{error}</span>
                             </div>
                         )}
                         {success && (
                             <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 rounded-xl p-4 flex gap-3 text-emerald-700 dark:text-emerald-400 animate-fadeUp text-sm shadow-sm font-medium">
-                                ✓ <span>{success}</span>
+                                <span>{success}</span>
                             </div>
                         )}
 

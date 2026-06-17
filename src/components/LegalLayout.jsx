@@ -62,7 +62,7 @@ export default function LegalLayout({ title, icon, lastUpdated, children }) {
 
             {/* Footer */}
             <footer className="bg-slate-950 border-t border-slate-900 py-8 text-center">
-                <p className="text-sm text-slate-500">© {new Date().getFullYear()} {PROJECT_NAME}. Todos los derechos reservados.</p>
+                <p className="text-sm text-slate-500">{new Date().getFullYear()} {PROJECT_NAME}. Todos los derechos reservados.</p>
                 <div className="flex justify-center gap-6 mt-3">
                     <Link to="/privacidad" className="text-xs text-slate-500 hover:text-emerald-400 transition">Privacidad</Link>
                     <Link to="/terminos" className="text-xs text-slate-500 hover:text-emerald-400 transition">Términos de uso</Link>

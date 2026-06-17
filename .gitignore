@@ -12,6 +12,7 @@ node_modules
 dist
 dist-ssr
 *.local
+rieguuv-firebase-adminsdk-fbsvc-48954e4616.json
 
 # Editor directories and files
 .vscode/*
@@ -31,6 +32,9 @@ esp32/.vscode/
 
 # Firebase — datos sensibles
 rieguuv-default-rtdb-export.json
+*-firebase-adminsdk-*.json
+serviceAccountKey.json
+netlify-alexa.env
 
 # Certificados locales de desarrollo
 .certs/
