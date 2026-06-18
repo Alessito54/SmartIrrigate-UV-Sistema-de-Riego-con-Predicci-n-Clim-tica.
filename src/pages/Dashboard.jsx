@@ -113,6 +113,15 @@ const sensorRanges = {
   viento:           { min: 0, max: 20 }
 };
 
+const notificationSensorConfig = [
+  { key: "humedad", label: "Hum. Suelo", unit: "%", defaultMin: 40, defaultMax: 90, lowTone: "danger", highTone: "warning" },
+  { key: "humedadAmbiente", label: "Hum. Ambiente", unit: "%", defaultMin: 30, defaultMax: 80, lowTone: "warning", highTone: "warning" },
+  { key: "radiacion", label: "Radiación UV", unit: "W/m²", defaultMin: 0, defaultMax: 900, lowTone: "info", highTone: "warning" },
+  { key: "temperatura", label: "Temp. Ambiente", unit: "°C", defaultMin: 10, defaultMax: 35, lowTone: "info", highTone: "warning" },
+  { key: "temperaturasuelo", label: "Temp. Suelo", unit: "°C", defaultMin: 10, defaultMax: 35, lowTone: "info", highTone: "warning" },
+  { key: "viento", label: "Viento", unit: "m/s", defaultMin: 0, defaultMax: 12, lowTone: "info", highTone: "warning" },
+];
+
 function getColor(sensor, value) {
   switch (sensor) {
     case "temperatura":
@@ -545,6 +554,88 @@ const StatusChip = memo(function StatusChip({ active, activeClass, inactiveClass
   );
 });
 
+const NotificationsPanel = memo(function NotificationsPanel({ notifications, totalCount, config, onViewAll }) {
+  const toneClasses = {
+    danger: "border-red-200 bg-red-50 text-red-700 dark:border-red-800/50 dark:bg-red-900/20 dark:text-red-300",
+    warning: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-900/20 dark:text-amber-300",
+    success: "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-900/20 dark:text-emerald-300",
+    info: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800/50 dark:bg-sky-900/20 dark:text-sky-300",
+  };
+
+  const displayCount = totalCount !== undefined ? totalCount : notifications.length;
+  const hasMore = totalCount !== undefined && totalCount > notifications.length;
+
+  return (
+    <div className="glass rounded-2xl p-3.5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100">
+            Notificaciones
+          </h3>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5">
+            Umbrales activos en modo manual o automático
+          </p>
+        </div>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${displayCount > 0 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"}`}>
+          {displayCount > 0 ? displayCount : "OK"}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {config && (
+          <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white/60 dark:bg-slate-800/45 px-3 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+              Configuración usada
+            </p>
+            <div className="space-y-1.5 text-[11px]">
+              {config.map((sensor) => (
+                <div key={sensor.key} className="flex items-center justify-between gap-2">
+                  <span className="text-gray-400 truncate">{sensor.label}</span>
+                  <b className="text-gray-700 dark:text-gray-200 flex-shrink-0">
+                    {sensor.min} - {sensor.max} {sensor.unit}
+                  </b>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {notifications.length === 0 ? (
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/70 dark:bg-emerald-900/15 px-3 py-3">
+            <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Sin alertas activas</p>
+            <p className="text-[11px] text-emerald-600/70 dark:text-emerald-400/70 mt-0.5">
+              Los sensores se mantienen dentro de los parámetros configurados, sin importar el modo de control.
+            </p>
+          </div>
+        ) : (
+          notifications.map((item) => (
+            <div key={item.id} className={`rounded-xl border px-3 py-2.5 ${toneClasses[item.tone] || toneClasses.info}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold leading-snug">{item.title}</p>
+                  <p className="text-[11px] opacity-80 leading-snug mt-0.5">{item.detail}</p>
+                </div>
+                <span className="text-[10px] font-bold uppercase opacity-60 flex-shrink-0">{item.label}</span>
+              </div>
+            </div>
+          ))
+        )}
+
+        {/* "Ver todas" link */}
+        {onViewAll && (
+          <button
+            onClick={onViewAll}
+            className="w-full mt-1 py-2 rounded-xl text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors duration-200 flex items-center justify-center gap-1.5 border border-dashed border-emerald-200 dark:border-emerald-800/40"
+          >
+            {hasMore ? `Ver todas (${totalCount})` : "Ver centro de alertas"}
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+});
+
 function getRiegoTimestamp(item) {
   const raw = item?.fin ?? item?.finTs ?? item?.creadoEn ?? item?.inicio ?? item?.inicioTs;
   if (typeof raw === "number" && Number.isFinite(raw)) return raw;
@@ -774,6 +865,7 @@ export default function Dashboard() {
   const [riegoFisico, setRiegoFisico] = useState(false);
   const [malla, setMalla] = useState(null);
   const [automatico, setAutomatico] = useState(false);
+  const [autoConfig, setAutoConfig] = useState(null);
   const [riegoProgramado, setRiegoProgramado] = useState({});
   const [historialRiego, setHistorialRiego] = useState([]);
   const [waterPeriod, setWaterPeriod] = useState("dia");
@@ -785,6 +877,14 @@ export default function Dashboard() {
   const [ia, setIa] = useState(null);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
   const [moduloLocation, setModuloLocation] = useState(null);
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try {
+      const stored = localStorage.getItem("oasys_dismissed_notifications");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
 
   // Estado derivado del módulo OASYS (sin listener propio: usa el de AuthContext)
   const linkedModuloEntry = invId && secId
@@ -812,7 +912,11 @@ export default function Dashboard() {
       onValue(ref(db, `${sectionPath}/control/riego`), (s) => setRiego(s.val() === true)),
       onValue(ref(db, `${sectionPath}/estadoRiego/activo`), (s) => setRiegoFisico(s.val() === true)),
       onValue(ref(db, `${sectionPath}/control/malla`), (s) => setMalla(s.val() === true)),
-      onValue(ref(db, `${sectionPath}/controlAutomatico/activo`), (s) => setAutomatico(s.val() === true)),
+      onValue(ref(db, `${sectionPath}/controlAutomatico`), (s) => {
+        const value = s.val() || {};
+        setAutoConfig(value);
+        setAutomatico(value.activo === true);
+      }),
       onValue(ref(db, `${sectionPath}/controlAutomatico/programaciones/riego`), (s) => setRiegoProgramado(s.val() || {})),
       onValue(ref(db, `${sectionPath}/historial_riego`), (s) => {
         const val = s.val() || {};
@@ -928,6 +1032,109 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sensores]
   );
+
+  const dashboardNotifications = useMemo(() => {
+    const list = [];
+    const liveAutoConfig = autoConfig || currentSection?.controlAutomatico || {};
+    const umbrales = liveAutoConfig.umbrales || {};
+    const acciones = liveAutoConfig.acciones || {};
+
+    notificationSensorConfig.forEach((sensor) => {
+      const raw = sensores?.[sensor.key];
+      const value = Number(raw);
+      const min = Number(umbrales?.[sensor.key]?.min ?? sensor.defaultMin);
+      const max = Number(umbrales?.[sensor.key]?.max ?? sensor.defaultMax);
+      const hasData = raw !== null && raw !== undefined && Number.isFinite(value);
+
+      if (!hasData) {
+        list.push({
+          id: `${sensor.key}-sin-datos`,
+          tone: "info",
+          label: "Sin datos",
+          title: `${sensor.label} sin lectura`,
+          detail: "OASYS no ha enviado datos para este sensor todavía.",
+        });
+        return;
+      }
+
+      if (value < min) {
+        const isCriticalSoilHumidity = sensor.key === "humedad" && value < Math.max(5, min * 0.55);
+        list.push({
+          id: `${sensor.key}-bajo`,
+          tone: isCriticalSoilHumidity ? "danger" : sensor.lowTone,
+          label: "Mínimo",
+          title: `${sensor.label} bajo el mínimo`,
+          detail: `Actual ${value.toFixed(1)} ${sensor.unit}. Rango configurado: ${min} a ${max} ${sensor.unit}.`,
+        });
+        return;
+      }
+
+      if (value > max) {
+        const titleByAction = sensor.key === "humedad" && acciones?.riego?.bajoHumedad
+          ? `${sensor.label} sobre el máximo`
+          : sensor.key === "temperatura" && acciones?.malla?.altaTemperatura
+            ? "Malla recomendada por temperatura alta"
+            : sensor.key === "radiacion" && acciones?.malla?.altaRadiacion
+              ? "Malla recomendada por radiación alta"
+              : `${sensor.label} sobre el máximo`;
+        list.push({
+          id: `${sensor.key}-alto`,
+          tone: sensor.highTone,
+          label: "Máximo",
+          title: titleByAction,
+          detail: `Actual ${value.toFixed(1)} ${sensor.unit}. Rango configurado: ${min} a ${max} ${sensor.unit}.`,
+        });
+      }
+    });
+
+    if (riegoActivo) {
+      list.push({
+        id: "riego-activo",
+        tone: "success",
+        label: "Riego",
+        title: "Riego activo",
+        detail: automatico ? "El sistema está regando en modo automático o por programación." : "La bomba está encendida desde control manual.",
+      });
+    }
+
+    if (malla) {
+      list.push({
+        id: "malla-activa",
+        tone: "success",
+        label: "Malla",
+        title: "Malla sombra desplegada",
+        detail: "La malla está activa para proteger el cultivo.",
+      });
+    }
+
+    const lastRiego = historialRiego.length > 0 ? historialRiego[historialRiego.length - 1] : null;
+    const lastTs = lastRiego ? getRiegoTimestamp(lastRiego) : 0;
+    if (lastTs && Date.now() - lastTs < 60 * 60 * 1000) {
+      list.push({
+        id: "riego-reciente",
+        tone: "info",
+        label: "Historial",
+        title: "Riego registrado recientemente",
+        detail: `Último riego: ${(Number(lastRiego.litros) || 0).toFixed(2)} L durante ${Math.round((Number(lastRiego.duracion_seg) || 0) / 60) || 1} min.`,
+      });
+    }
+
+    return list.filter((n) => !dismissedIds.includes(n.id));
+  }, [automatico, autoConfig, currentSection, historialRiego, malla, riegoActivo, sensores, dismissedIds]);
+
+  const dashboardNotificationsPreview = useMemo(() => dashboardNotifications.slice(0, 2), [dashboardNotifications]);
+
+  const notificationConfig = useMemo(() => {
+    const liveAutoConfig = autoConfig || currentSection?.controlAutomatico || {};
+    const umbrales = liveAutoConfig.umbrales || {};
+    return notificationSensorConfig.map((sensor) => ({
+      key: sensor.key,
+      label: sensor.label,
+      unit: sensor.unit,
+      min: Number(umbrales?.[sensor.key]?.min ?? sensor.defaultMin),
+      max: Number(umbrales?.[sensor.key]?.max ?? sensor.defaultMax),
+    }));
+  }, [autoConfig, currentSection]);
 
   const handleHelp = useCallback((e, sensorKey) => {
     e.stopPropagation();
@@ -1197,7 +1404,16 @@ export default function Dashboard() {
             </p>
           </div>
 
-          <div className="order-2 space-y-2.5">
+          <div className="order-2">
+            <NotificationsPanel
+              notifications={dashboardNotificationsPreview}
+              totalCount={dashboardNotifications.length}
+              config={notificationConfig}
+              onViewAll={() => navigate("/notificaciones")}
+            />
+          </div>
+
+          <div className="order-3 space-y-2.5">
             <StatusCard
               title="OASYS Módulo Climático"
               icon={<FiWifi className="text-2xl text-emerald-500" />}
@@ -1226,7 +1442,7 @@ export default function Dashboard() {
             />
           </div>
 
-          <div className="order-3 glass rounded-2xl p-3.5">
+          <div className="order-4 glass rounded-2xl p-3.5">
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
                 <h3 className="text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
@@ -1347,7 +1563,7 @@ export default function Dashboard() {
           </div>
 
           {/* Quick summary card */}
-          <div className="order-4 glass rounded-2xl p-3.5">
+          <div className="order-5 glass rounded-2xl p-3.5">
             <h3 className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
               Resumen rápido
             </h3>

@@ -14,6 +14,7 @@ import ControlManual from "./pages/ControlManual";
 import Privacidad from "./pages/Privacidad";
 import TerminosUso from "./pages/TerminosUso";
 import DerechosAutor from "./pages/DerechosAutor";
+import Notificaciones from "./pages/Notificaciones";
 
 export default function App() {
   return (
@@ -40,6 +41,7 @@ export default function App() {
                   <Route path="/historial" element={<Historial />} />
                   <Route path="/invernaderos" element={<Invernaderos />} />
                   <Route path="/vinculacion" element={<Vinculacion />} />
+                  <Route path="/notificaciones" element={<Notificaciones />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

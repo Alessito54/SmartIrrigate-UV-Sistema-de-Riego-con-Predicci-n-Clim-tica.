@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { ref, set } from "firebase/database";
+import { ref, set, get } from "firebase/database";
 import { db } from "../services/firebase";
 import { useAuth } from "../context/AuthContext";
 import { isModuleOnline } from "../services/modulos";
 import {
   FiUser, FiMoon, FiSun, FiLayers, FiChevronRight,
-  FiLogOut, FiEdit2, FiCheck, FiWifi, FiWifiOff,
+  FiLogOut, FiEdit2, FiCheck, FiWifi, FiWifiOff, FiSmartphone,
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
@@ -30,6 +30,32 @@ export default function Ajustes() {
   const [savedNombre, setSavedNombre] = useState(false);
   const [editingName, setEditingName] = useState(false);
 
+  // Phone number state
+  const [telefono, setTelefono] = useState("");
+  const [lada, setLada] = useState("+52");
+  const [telefonoLocal, setTelefonoLocal] = useState("");
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [savedPhone, setSavedPhone] = useState(false);
+
+  // Load phone from Firebase
+  useEffect(() => {
+    if (!user) return;
+    get(ref(db, `usuarios/${user.uid}/telefono`)).then((snap) => {
+      if (snap.exists()) {
+        const fullPhone = snap.val();
+        setTelefono(fullPhone);
+        const match = fullPhone.match(/^(\+\d{1,3})(\d+)$/);
+        if (match) {
+          setLada(match[1]);
+          setTelefonoLocal(match[2]);
+        } else {
+          setTelefonoLocal(fullPhone);
+        }
+      }
+    }).catch(() => {});
+  }, [user]);
+
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -53,6 +79,19 @@ export default function Ajustes() {
       setEditingName(false);
       setTimeout(() => setSavedNombre(false), 2500);
     } finally { setSavingNombre(false); }
+  }
+
+  async function guardarTelefono() {
+    if (!user || !telefonoLocal.trim()) return;
+    setSavingPhone(true);
+    const fullPhone = `${lada}${telefonoLocal.replace(/\D/g, "")}`;
+    try {
+      await set(ref(db, `usuarios/${user.uid}/telefono`), fullPhone);
+      setTelefono(fullPhone);
+      setSavedPhone(true);
+      setEditingPhone(false);
+      setTimeout(() => setSavedPhone(false), 2500);
+    } finally { setSavingPhone(false); }
   }
 
   const invEntries = Object.entries(invernaderos || {});
@@ -154,6 +193,74 @@ export default function Ajustes() {
                 <span className="text-sm text-gray-500 dark:text-gray-400 flex-1 truncate">{user?.email || "—"}</span>
                 <span className="text-[10px] font-bold text-gray-300 dark:text-slate-600 uppercase tracking-wide">Solo lectura</span>
               </div>
+            </div>
+
+            {/* Teléfono */}
+            <div>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-1.5">
+                Teléfono para alertas SMS
+              </label>
+              {editingPhone ? (
+                <div className="flex gap-2">
+                  <div className="flex flex-1 gap-2">
+                    <div className="relative w-28 flex-shrink-0">
+                      <select
+                        value={lada}
+                        onChange={(e) => setLada(e.target.value)}
+                        className="w-full bg-white/60 dark:bg-slate-800/60 border border-emerald-400/50 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 transition appearance-none font-semibold text-gray-700 dark:text-gray-200"
+                      >
+                        <option value="+52">🇲🇽 +52</option>
+                        <option value="+1">🇺🇸 +1</option>
+                        <option value="+34">🇪🇸 +34</option>
+                        <option value="+57">🇨🇴 +57</option>
+                        <option value="+54">🇦🇷 +54</option>
+                        <option value="+56">🇨🇱 +56</option>
+                        <option value="+51">🇵🇪 +51</option>
+                      </select>
+                    </div>
+                    <div className="relative flex-1">
+                      <FiSmartphone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+                      <input
+                        autoFocus
+                        type="tel"
+                        value={telefonoLocal}
+                        onChange={(e) => setTelefonoLocal(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === "Enter") guardarTelefono(); if (e.key === "Escape") setEditingPhone(false); }}
+                        placeholder="1234567890"
+                        className="w-full pl-9 pr-4 bg-white/60 dark:bg-slate-800/60 border border-emerald-400/50 rounded-xl py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500/40 transition"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    onClick={guardarTelefono}
+                    disabled={savingPhone || !telefonoLocal.trim()}
+                    className="px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    <FiCheck size={14} />
+                    {savingPhone ? "..." : savedPhone ? "Guardado" : "Guardar"}
+                  </button>
+                  <button onClick={() => setEditingPhone(false)}
+                    className="px-3 py-2.5 bg-gray-100 dark:bg-slate-700 text-gray-500 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 transition text-sm">
+                    Cerrar
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between bg-white/40 dark:bg-slate-800/40 border border-gray-100 dark:border-slate-700 rounded-xl px-4 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <FiSmartphone className="text-gray-400" size={14} />
+                    <span className="text-sm text-gray-700 dark:text-gray-200">{telefono || "No configurado"}</span>
+                  </div>
+                  <button
+                    onClick={() => setEditingPhone(true)}
+                    className="text-gray-400 hover:text-emerald-500 transition p-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                  >
+                    <FiEdit2 size={13} />
+                  </button>
+                </div>
+              )}
+              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-1.5 ml-1">
+                Selecciona tu país y escribe tu número a 10 dígitos. Ej: 2281234567
+              </p>
             </div>
           </div>
         </div>

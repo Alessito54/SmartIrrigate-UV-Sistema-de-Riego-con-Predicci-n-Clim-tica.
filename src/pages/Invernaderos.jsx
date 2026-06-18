@@ -39,7 +39,14 @@ const DEFAULT_SECTION = {
     controlAutomatico: {
         activo: false,
         acciones: { malla: { altaRadiacion: false, altaTemperatura: false }, riego: { bajoHumedad: false } },
-        umbrales: { humedad: { min: 40 }, radiacion: { max: 900 }, temperatura: { max: 35, min: 10 } },
+        umbrales: {
+            humedad: { min: 40, max: 90 },
+            humedadAmbiente: { min: 30, max: 80 },
+            radiacion: { min: 0, max: 900 },
+            temperatura: { max: 35, min: 10 },
+            temperaturasuelo: { max: 35, min: 10 },
+            viento: { min: 0, max: 12 },
+        },
     },
     sensores: { humedad: 0, radiacion: 0, temperatura: 0, viento: 0 },
 };
@@ -49,7 +56,14 @@ const DEFAULT_INVERNADERO_CONTROL = {
     controlAutomatico: {
         activo: false,
         acciones: { malla: { altaRadiacion: false, altaTemperatura: true }, riego: { bajoHumedad: true } },
-        umbrales: { humedad: { min: 40 }, radiacion: { max: 900 }, temperatura: { max: 35, min: 10 } },
+        umbrales: {
+            humedad: { min: 40, max: 90 },
+            humedadAmbiente: { min: 30, max: 80 },
+            radiacion: { min: 0, max: 900 },
+            temperatura: { max: 35, min: 10 },
+            temperaturasuelo: { max: 35, min: 10 },
+            viento: { min: 0, max: 12 },
+        },
     },
 };
 
@@ -110,7 +124,7 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
         const unsub = onValue(ref(db, `${secPath}/controlAutomatico`), (snap) => {
             setAutoConfig(snap.val() || {
                 activo: false,
-                umbrales: { humedad: { min: 40 }, temperatura: { max: 35, min: 10 }, radiacion: { max: 900 } },
+                umbrales: DEFAULT_SECTION.controlAutomatico.umbrales,
                 acciones: { riego: { bajoHumedad: false }, malla: { altaTemperatura: false, altaRadiacion: false } },
             });
         });
@@ -136,9 +150,9 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
             ...prev,
             umbrales: {
                 ...(prev?.umbrales || {}),
-                humedad: { min: p.humedad_min ?? 40 },
-                temperatura: { max: p.temperatura_max ?? 35, min: prev?.umbrales?.temperatura?.min ?? 10 },
-                radiacion: { max: p.radiacion_max ?? 900 },
+                humedad: { ...(prev?.umbrales?.humedad || {}), min: p.humedad_min ?? 40 },
+                temperatura: { ...(prev?.umbrales?.temperatura || {}), max: p.temperatura_max ?? 35, min: prev?.umbrales?.temperatura?.min ?? 10 },
+                radiacion: { ...(prev?.umbrales?.radiacion || {}), max: p.radiacion_max ?? 900 },
             },
             acciones: {
                 riego: { bajoHumedad: p.accion_riego ?? false },
@@ -481,47 +495,69 @@ function SeccionCard({ invId, secId, sec, inv, onReload }) {
                                     )}
                                 </div>
 
-                                {/* ── Sliders, always editable; any change uses Personalizado ── */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                    {/* Humidity */}
-                                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2">
-                                        <p className="text-xs font-bold text-blue-600 dark:text-blue-400">Humedad mínima</p>
-                                        <input type="range" min={0} max={100} value={autoConfig.umbrales?.humedad?.min ?? 40}
-                                            onChange={(e) => setUmbral(["umbrales", "humedad", "min"], parseInt(e.target.value))}
-                                            className="w-full accent-blue-500 cursor-pointer" />
-                                        <p className="text-xl font-extrabold text-blue-600 dark:text-blue-400">{autoConfig.umbrales?.humedad?.min ?? 40}%</p>
+                                <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl p-4 space-y-3">
+                                    <div>
+                                        <p className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+                                            Rangos de notificación
+                                        </p>
+                                        <p className="text-[11px] text-gray-400 mt-0.5">
+                                            Cada sensor notificará si baja del mínimo o supera el máximo.
+                                        </p>
+                                    </div>
+                                    <div className="grid gap-2">
+                                        {[
+                                            { key: "humedad", label: "Hum. Suelo", unit: "%", min: 0, max: 100, defaultMin: 40, defaultMax: 90 },
+                                            { key: "humedadAmbiente", label: "Hum. Ambiente", unit: "%", min: 0, max: 100, defaultMin: 30, defaultMax: 80 },
+                                            { key: "radiacion", label: "Radiación UV", unit: "W/m²", min: 0, max: 1200, defaultMin: 0, defaultMax: 900 },
+                                            { key: "temperatura", label: "Temp. Ambiente", unit: "°C", min: 0, max: 50, defaultMin: 10, defaultMax: 35 },
+                                            { key: "temperaturasuelo", label: "Temp. Suelo", unit: "°C", min: 0, max: 50, defaultMin: 10, defaultMax: 35 },
+                                            { key: "viento", label: "Viento", unit: "m/s", min: 0, max: 25, defaultMin: 0, defaultMax: 12 },
+                                        ].map((sensor) => (
+                                            <div key={sensor.key} className="grid grid-cols-[minmax(92px,1fr)_72px_72px] gap-2 items-center rounded-xl border border-gray-100 dark:border-slate-700/70 px-3 py-2">
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-gray-700 dark:text-gray-200 truncate">{sensor.label}</p>
+                                                    <p className="text-[10px] text-gray-400">{sensor.unit}</p>
+                                                </div>
+                                                <label className="space-y-0.5">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Min</span>
+                                                    <input
+                                                        type="number"
+                                                        min={sensor.min}
+                                                        max={sensor.max}
+                                                        value={autoConfig.umbrales?.[sensor.key]?.min ?? sensor.defaultMin}
+                                                        onChange={(e) => setUmbral(["umbrales", sensor.key, "min"], Number(e.target.value))}
+                                                        className="w-full px-2 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                                    />
+                                                </label>
+                                                <label className="space-y-0.5">
+                                                    <span className="text-[9px] font-bold uppercase tracking-wider text-gray-400">Max</span>
+                                                    <input
+                                                        type="number"
+                                                        min={sensor.min}
+                                                        max={sensor.max}
+                                                        value={autoConfig.umbrales?.[sensor.key]?.max ?? sensor.defaultMax}
+                                                        onChange={(e) => setUmbral(["umbrales", sensor.key, "max"], Number(e.target.value))}
+                                                        className="w-full px-2 py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white/70 dark:bg-slate-900/60 text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500/30"
+                                                    />
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="grid sm:grid-cols-3 gap-2 pt-1">
                                         <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
                                             <input type="checkbox" checked={autoConfig.acciones?.riego?.bajoHumedad ?? false}
                                                 onChange={(e) => setUmbral(["acciones", "riego", "bajoHumedad"], e.target.checked)} className="accent-emerald-500" />
-                                            Activar riego al bajar
+                                            Riego por humedad baja
                                         </label>
-                                    </div>
-
-                                    {/* Temperature */}
-                                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2">
-                                        <p className="text-xs font-bold text-orange-600 dark:text-orange-400">Temperatura máx.</p>
-                                        <input type="range" min={20} max={50} value={autoConfig.umbrales?.temperatura?.max ?? 35}
-                                            onChange={(e) => setUmbral(["umbrales", "temperatura", "max"], parseInt(e.target.value))}
-                                            className="w-full accent-orange-500 cursor-pointer" />
-                                        <p className="text-xl font-extrabold text-orange-600 dark:text-orange-400">{autoConfig.umbrales?.temperatura?.max ?? 35}°C</p>
                                         <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
                                             <input type="checkbox" checked={autoConfig.acciones?.malla?.altaTemperatura ?? false}
                                                 onChange={(e) => setUmbral(["acciones", "malla", "altaTemperatura"], e.target.checked)} className="accent-emerald-500" />
-                                            Activar malla al superar
+                                            Malla por temperatura
                                         </label>
-                                    </div>
-
-                                    {/* Radiation */}
-                                    <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl px-4 py-3 space-y-2 sm:col-span-2">
-                                        <p className="text-xs font-bold text-yellow-600 dark:text-yellow-400">Radiación máx. (W/m²)</p>
-                                        <input type="range" min={0} max={1200} value={autoConfig.umbrales?.radiacion?.max ?? 900}
-                                            onChange={(e) => setUmbral(["umbrales", "radiacion", "max"], parseInt(e.target.value))}
-                                            className="w-full accent-yellow-500 cursor-pointer" />
-                                        <p className="text-xl font-extrabold text-yellow-600 dark:text-yellow-400">{autoConfig.umbrales?.radiacion?.max ?? 900} W/m²</p>
                                         <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400 cursor-pointer">
                                             <input type="checkbox" checked={autoConfig.acciones?.malla?.altaRadiacion ?? false}
                                                 onChange={(e) => setUmbral(["acciones", "malla", "altaRadiacion"], e.target.checked)} className="accent-emerald-500" />
-                                            Activar malla por radiación alta
+                                            Malla por radiación
                                         </label>
                                     </div>
                                 </div>

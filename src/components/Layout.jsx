@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { FiHome, FiSettings, FiLogOut, FiChevronDown, FiLink, FiLayers, FiChevronRight, FiToggleRight } from "react-icons/fi";
+import { FiHome, FiSettings, FiLogOut, FiChevronDown, FiLink, FiLayers, FiChevronRight, FiToggleRight, FiBell } from "react-icons/fi";
 import { PiPlantLight } from "react-icons/pi";
 import { LuClock } from "react-icons/lu";
 import { useAuth } from "../context/AuthContext";
@@ -14,6 +14,7 @@ const menu = [
   { path: "/historial", label: "Historial", icon: LuClock },
   { path: "/invernaderos", label: "Invernaderos", icon: FiLayers },
   { path: "/vinculacion", label: "Vinculación", icon: FiLink },
+  { path: "/notificaciones", label: "Alertas", icon: FiBell },
   { path: "/ajustes", label: "Ajustes", icon: FiSettings },
 ];
 
